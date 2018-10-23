@@ -1,0 +1,5 @@
+{
+    "name":"qk",
+    "fields":[
+        {"name":"w","type":"string"},
+        {"name":"m","type":{"name":"b","fields":[{"name":"h","type":"int"}],"type":"record"}}],"type":"record"}
