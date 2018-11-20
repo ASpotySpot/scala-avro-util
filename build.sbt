@@ -5,18 +5,11 @@ lazy val commonSettings = Seq(
   resolvers += Resolver.jcenterRepo,
   scalacOptions ++= scalacFlags,
   libraryDependencies ++= Seq(
-    "io.circe" %% "circe-core" % "0.9.3",
-    "io.circe" %% "circe-generic" % "0.9.3",
-    "io.circe" %% "circe-parser" % "0.9.3",
-    "io.circe" %% "circe-generic-extras" % "0.9.3",
-    "org.scala-lang" % "scala-compiler" % "2.12.4",
-    "com.lihaoyi" %% "pprint" % "0.5.3",
     "org.typelevel" %% "cats-core" % "1.2.0",
     "eu.timepit" %% "refined" % "0.9.2",
     "eu.timepit" %% "refined-scalacheck" % "0.9.2" % Test,
     "org.scalacheck" %% "scalacheck" % "1.14.0" % Test,
-    "org.scalatest" %% "scalatest" % "3.0.5" % Test,
-    "com.github.alexarchambault" %% "scalacheck-shapeless_1.13" % "1.1.6" % Test
+    "org.scalatest" %% "scalatest" % "3.0.5" % Test
   ),
   sourceGenerators in Compile +=(avroScalaGenerate in Compile).taskValue
 )
@@ -34,7 +27,12 @@ lazy val codec = (project in file("codec")).
 lazy val schema = (project in file("schema")).
   settings(
     commonSettings,
-    name:= "scalaavro-schema"
+    name:= "scalaavro-schema",
+    libraryDependencies ++= Seq(
+      "io.circe" %% "circe-core" % "0.9.3",
+      "io.circe" %% "circe-generic" % "0.9.3",
+      "io.circe" %% "circe-parser" % "0.9.3"
+    )
   )
 
 lazy val builder = (project in file("builder")).
@@ -52,7 +50,7 @@ lazy val macros = (project in file("macros")).
     name := "scalaavro-macros"
   )
 
-lazy val `macros-test` = (project in file("macro-test")).
+lazy val `macros-test` = (project in file("macros-test")).
   dependsOn(macros).
   settings(
     addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.1" cross CrossVersion.full),
