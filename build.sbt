@@ -5,10 +5,6 @@ lazy val commonSettings = Seq(
   resolvers += Resolver.jcenterRepo,
   scalacOptions ++= scalacFlags,
   libraryDependencies ++= Seq(
-    "org.apache.avro" % "avro" % "1.8.2",
-    "org.scodec" %% "scodec-bits" % "1.1.5",
-    "org.scodec" %% "scodec-core" % "1.10.3",
-    "com.sksamuel.avro4s" %% "avro4s-core" % "1.9.0",
     "io.circe" %% "circe-core" % "0.9.3",
     "io.circe" %% "circe-generic" % "0.9.3",
     "io.circe" %% "circe-parser" % "0.9.3",
@@ -17,26 +13,55 @@ lazy val commonSettings = Seq(
     "com.lihaoyi" %% "pprint" % "0.5.3",
     "org.typelevel" %% "cats-core" % "1.2.0",
     "eu.timepit" %% "refined" % "0.9.2",
-    "eu.timepit" %% "refined-scalacheck" % "0.9.2",
-    "org.scalacheck" %% "scalacheck" % "1.14.0" % "test",
-    "org.scalatest" %% "scalatest" % "3.0.5" % "test",
-    "com.github.alexarchambault" %% "scalacheck-shapeless_1.13" % "1.1.6"
+    "eu.timepit" %% "refined-scalacheck" % "0.9.2" % Test,
+    "org.scalacheck" %% "scalacheck" % "1.14.0" % Test,
+    "org.scalatest" %% "scalatest" % "3.0.5" % Test,
+    "com.github.alexarchambault" %% "scalacheck-shapeless_1.13" % "1.1.6" % Test
   ),
   sourceGenerators in Compile +=(avroScalaGenerate in Compile).taskValue
 )
 
-lazy val core = (project in file("core")).
+lazy val codec = (project in file("codec")).
   settings(
     commonSettings,
-    name:= "scalaavro-core"
+    name := "scalavro-codec",
+    libraryDependencies ++= Seq(
+      "org.scodec" %% "scodec-bits" % "1.1.5",
+      "org.scodec" %% "scodec-core" % "1.10.3",
+      "org.apache.avro" % "avro" % "1.8.2" % Test,
+    )
+  )
+lazy val schema = (project in file("schema")).
+  settings(
+    commonSettings,
+    name:= "scalaavro-schema"
   )
 
 lazy val builder = (project in file("builder")).
-  dependsOn(core).
+  dependsOn(schema).
   settings(
     commonSettings,
     name:= "scalaavro-class-builder"
   )
+lazy val macros = (project in file("macros")).
+  dependsOn(schema).
+  settings(
+    libraryDependencies += "org.scala-lang" % "scala-reflect" % "2.12.4",
+    libraryDependencies +=  "org.apache.avro" % "avro" % "1.8.2",
+    addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.1" cross CrossVersion.full),
+    name := "scalaavro-macros"
+  )
+
+lazy val `macros-test` = (project in file("macro-test")).
+  dependsOn(macros).
+  settings(
+    addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.1" cross CrossVersion.full),
+    name:= "top"
+  )
+
+lazy val root = (project in file(".")).
+  aggregate(`macros-test`, macros, codec, schema, builder)
+
 
 lazy val scalacFlags = Seq(
   "-deprecation",                      // Emit warning and location for usages of deprecated APIs.
@@ -81,7 +106,7 @@ lazy val scalacFlags = Seq(
   "-Ywarn-unused:imports",             // Warn if an import selector is not referenced.
   "-Ywarn-unused:locals",              // Warn if a local definition is unused.
   "-Ywarn-unused:params",              // Warn if a value parameter is unused.
-  "-Ywarn-unused:patvars",             // Warn if a variable bound in a pattern is unused.
+//  "-Ywarn-unused:patvars",             // Warn if a variable bound in a pattern is unused.
   "-Ywarn-unused:privates",            // Warn if a private member is unused.
   "-Ywarn-value-discard",               // Warn when non-Unit expression results are unused.
   "-Ypatmat-exhaust-depth", "40"
