@@ -48,11 +48,12 @@ object AvscParser extends AutoDerivation {
       fromFields(
         List(
           "name" -> Json.fromString(r.name.value),
-          "fields" -> Json.fromValues(r.fields.map(f => fromField(f)).toList)
+          "fields" -> Json.fromValues(r.fields.map(f => fromField(f)).toList),
+          "type" -> Json.fromString("record")
         ), List(
           r.doc.map(d => "doc" -> Json.fromString(d)),
           r.aliases.map(as => "aliases" -> Json.fromValues(as.map(s => Json.fromString(s.value)))),
-          r.namespace.map(ns => "namepsace" -> Json.fromString(ns.value))
+           r.namespace.map(ns => "namespace" -> Json.fromString(ns.value))
         )
       )
     }
@@ -91,7 +92,8 @@ object AvscParser extends AutoDerivation {
       fromFields(
         List(
           "name" -> Json.fromString(enum.name.value),
-          "symbols" -> Json.fromValues(enum.symbols.map(s => Json.fromString(s.value)).toList)
+          "symbols" -> Json.fromValues(enum.symbols.map(s => Json.fromString(s.value)).toList),
+          "type" -> Json.fromString("enum")
         ), List(
           enum.doc.map(d => "doc" -> Json.fromString(d)),
           enum.aliases.map(as => "aliases" -> Json.fromValues(as.map(s => Json.fromString(s.value)))),
@@ -118,7 +120,7 @@ object AvscParser extends AutoDerivation {
     def fromMap(map: MapType): Json = {
       fromFields(
         "type" -> Json.fromString("map"),
-        "items" -> fromType(map.values)
+        "values" -> fromType(map.values)
       )
     }
     def toUnion(js: Vector[Json]): V[Union] = {
@@ -142,7 +144,8 @@ object AvscParser extends AutoDerivation {
     def fromFixed(fixed: Fixed): Json = fromFields(
       List(
         "name" -> Json.fromString(fixed.name.value),
-        "size" -> Json.fromInt(fixed.size)
+        "size" -> Json.fromInt(fixed.size),
+        "type" -> Json.fromString("fixed")
       ), List(
         fixed.namespace.map(ns => "namespace" -> Json.fromString(ns.value)),
         fixed.aliases.map(as => "aliases" -> Json.fromValues(as.map(s => Json.fromString(s.value)))),

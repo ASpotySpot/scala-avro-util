@@ -21,6 +21,17 @@ object AvscType {
     case "string" => StringType
     case recName => RecordByName(recName)
   }
+
+  def fromScala(typeStr: String): AvscType = typeStr match {
+    case "Null" => NullType
+    case "Boolean" => BoolType
+    case "Int" => IntType
+    case "Long" => LongType
+    case "Float" => FloatType
+    case "Double" => DoubleType
+    case "Array[Byte]" => BytesType
+    case "String" => StringType
+  }
 }
 
 sealed trait SimpleAvscType extends AvscType {

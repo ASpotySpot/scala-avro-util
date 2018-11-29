@@ -4,47 +4,37 @@ import cats.data.NonEmptyList
 import eu.timepit.refined.types.string.NonEmptyString
 import scalavro.schema._
 
-object AvroADTParser {
-  val universe: scala.reflect.runtime.universe.type =
-    scala.reflect.runtime.universe
+import scala.reflect.api.Universe
 
+object AvroADTParser {
+  def apply(): AvroADTParser ={
+    apply(scala.reflect.runtime.universe)
+  }
+  def apply(universe: Universe): AvroADTParser = {
+    new AvroADTParser(universe)
+  }
+}
+
+class AvroADTParser(val universe: Universe) {
   import universe.Flag._
   import universe._
 
-  private case class StuffContext[A](a: A, stuff: StuffToBuild) {
-    def addStuff(newStuff: StuffToBuild): StuffContext[A] = new StuffContext[A](a, newStuff |+| stuff)
-    def map[B](f: A => B): StuffContext[B] = new StuffContext[B](f(a), stuff)
-    def flatMap[B](f: A => StuffContext[B]): StuffContext[B] = f(a).addStuff(stuff)
+  def buildAllClassesAsStr(record: Record): List[String] =
+    buildAllClasses(record).map(t => showCode(t).replace("\n\n", "\n"))
+
+  def buildAllClasses(record: Record): List[universe.PackageDef] = {
+    assert(record.namespace.isDefined, "Parent Record Must have a namespace")
+    val packages = buildStuff(record.namespace.get, StuffToBuild(List(record), List.empty))
+    packages.groupBy(p => fullPackageName(p)).map{
+      case (_, pkgs) =>
+        val pkgTree = PackageDef.unapply(pkgs.head).map(_._1).get
+        val allTree = pkgs.flatMap {
+          case PackageDef(_, trees) => trees
+        }
+        PackageDef(pkgTree, distinctAndSortMembers(allTree))
+    }.toList
   }
 
-  private object StuffContext {
-    def empty[A](a: A): StuffContext[A] = new StuffContext[A](a, StuffToBuild.empty)
-
-    def sequence[A](ls: NonEmptyList[StuffContext[A]]): StuffContext[List[A]] = {
-      ls.foldLeft(StuffContext.empty(List.empty[A])) { (ctxAs, ctxA) =>
-        for {
-          as <- ctxAs
-          a <- ctxA
-        } yield a :: as
-      }
-    }
-  }
-
-  private case class StuffToBuild(records: List[Record], enums: List[(NonEmptyString, NonEmptyString, NonEmptyList[NonEmptyString])]) {
-    def |+|(newStuff: StuffToBuild): StuffToBuild = StuffToBuild(records ++ newStuff.records, enums ++ newStuff.enums)
-  }
-
-  private object StuffToBuild {
-    def empty: StuffToBuild = StuffToBuild(List.empty, List.empty)
-
-    def flatten(stuffs: List[StuffToBuild]): StuffToBuild = stuffs.reduceOption(_ |+| _).getOrElse(StuffToBuild.empty)
-  }
-
-//  private def nsToRefTree(ns: String): RefTree = {
-//    val split = ns.split('.')
-//    val init = RefTree(q"", TermName(split.head))
-//    split.tail.foldLeft(init) { case (t, qual) => RefTree(t, TermName(qual)) }
-//  }
 
   private def typeToTypeName(`type`: SimpleAvscType): TypeName = `type` match {
     case NullType => TypeName("Null")
@@ -69,8 +59,12 @@ object AvroADTParser {
       Ident(TypeName("Array")),
       List(typeTree)
     )
-    case MapType(_) =>
-      ???
+    case MapType(valueType) => for {
+      typeTree <- typeToTypeTree(ns, valueType)
+    } yield AppliedTypeTree(
+      Ident(TypeName("Map")),
+      List(typeTree)
+    )
     case Union(types) =>
       val containsNull = types.toList.contains(NullType)
       val notNulls = types.filter(_ != NullType)
@@ -160,21 +154,7 @@ object AvroADTParser {
     body
   )
 
-  def buildAllClassesAsStr(record: Record): List[String] =
-    buildAllClasses(record).map(t => showCode(t).replace("\n\n", "\n"))
 
-  def buildAllClasses(record: Record): List[PackageDef] = {
-    assert(record.namespace.isDefined, "Parent Record Must have a namespace")
-    val packages = buildStuff(record.namespace.get, StuffToBuild(List(record), List.empty))
-    packages.groupBy(p => fullPackageName(p)).map{
-      case (_, pkgs) =>
-        val pkgTree = PackageDef.unapply(pkgs.head).map(_._1).get
-        val allTree = pkgs.flatMap {
-          case PackageDef(_, trees) => trees
-        }
-        PackageDef(pkgTree, distinctAndSortMembers(allTree))
-    }.toList
-  }
   private def distinctAndSortMembers(trees: List[Tree]): List[Tree] = {
     trees.groupBy{
       case cd: ClassDef => cd.name

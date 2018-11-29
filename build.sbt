@@ -1,5 +1,5 @@
 lazy val commonSettings = Seq(
-  version := "0.1",
+  version := "0.1.0-SNAPSHOT",
   scalaVersion := "2.12.4",
   resolvers += "Sonatype Public" at "https://oss.sonatype.org/content/groups/public/",
   resolvers += Resolver.jcenterRepo,
@@ -9,7 +9,8 @@ lazy val commonSettings = Seq(
     "eu.timepit" %% "refined" % "0.9.2",
     "eu.timepit" %% "refined-scalacheck" % "0.9.2" % Test,
     "org.scalacheck" %% "scalacheck" % "1.14.0" % Test,
-    "org.scalatest" %% "scalatest" % "3.0.5" % Test
+    "org.scalatest" %% "scalatest" % "3.0.5" % Test,
+    "com.github.alexarchambault" %% "scalacheck-shapeless_1.13" % "1.1.6" % Test
   ),
   sourceGenerators in Compile +=(avroScalaGenerate in Compile).taskValue
 )
@@ -21,7 +22,7 @@ lazy val codec = (project in file("codec")).
     libraryDependencies ++= Seq(
       "org.scodec" %% "scodec-bits" % "1.1.5",
       "org.scodec" %% "scodec-core" % "1.10.3",
-      "org.apache.avro" % "avro" % "1.8.2" % Test,
+      "org.apache.avro" % "avro" % "1.8.2" % Test
     )
   )
 lazy val schema = (project in file("schema")).
@@ -31,7 +32,8 @@ lazy val schema = (project in file("schema")).
     libraryDependencies ++= Seq(
       "io.circe" %% "circe-core" % "0.9.3",
       "io.circe" %% "circe-generic" % "0.9.3",
-      "io.circe" %% "circe-parser" % "0.9.3"
+      "io.circe" %% "circe-parser" % "0.9.3",
+      "org.apache.avro" % "avro" % "1.8.2" % Test
     )
   )
 
@@ -53,12 +55,23 @@ lazy val macros = (project in file("macros")).
 lazy val `macros-test` = (project in file("macros-test")).
   dependsOn(macros).
   settings(
+    name:= "scalavro-macros-test",
     addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.1" cross CrossVersion.full),
-    name:= "top"
+    libraryDependencies ++= Seq(
+      "org.scalatest" %% "scalatest" % "3.0.5" % Test
+    )
+  )
+
+lazy val plugin = (project in file("plugin")).
+  dependsOn(schema, builder).
+  settings(
+    name := "scalavro-sbt",
+    dependencyOverrides += "org.spire-math" % "jawn-parser_2.11" % "0.11.1",
+    sbtPlugin := true
   )
 
 lazy val root = (project in file(".")).
-  aggregate(`macros-test`, macros, codec, schema, builder)
+  aggregate(`macros-test`, macros, codec, schema, builder, plugin)
 
 
 lazy val scalacFlags = Seq(
@@ -101,7 +114,7 @@ lazy val scalacFlags = Seq(
   "-Ywarn-nullary-unit",               // Warn when nullary methods return Unit.
   "-Ywarn-numeric-widen",              // Warn when numerics are widened.
   "-Ywarn-unused:implicits",           // Warn if an implicit parameter is unused.
-  "-Ywarn-unused:imports",             // Warn if an import selector is not referenced.
+//  "-Ywarn-unused:imports",             // Warn if an import selector is not referenced.
   "-Ywarn-unused:locals",              // Warn if a local definition is unused.
   "-Ywarn-unused:params",              // Warn if a value parameter is unused.
 //  "-Ywarn-unused:patvars",             // Warn if a variable bound in a pattern is unused.

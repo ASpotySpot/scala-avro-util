@@ -4,15 +4,19 @@ package scalavro.macros
 import cats.data.NonEmptyList
 import scalavro.util.RefineUtils._
 import io.circe.syntax._
+import io.circe.generic._
+import io.circe.parser._
 import scalavro.schema.parser.AvscParser._
 import org.apache.avro.Schema
-import scalavro.schema.{Field, Record, StringType}
+import scalavro.schema._
+import scalavro.schema.parser.AvscParser
 
 import scala.annotation.StaticAnnotation
 import scala.language.experimental.macros
 import scala.reflect.macros.whitebox
+import scala.util.Failure
 
-class AsGenericContainer extends StaticAnnotation {
+class AsGenericContainer(schema: String) extends StaticAnnotation {
   def macroTransform(annottees: Any*): Any = macro AsGenericContainerImpl.impl
 }
 
@@ -20,6 +24,15 @@ object AsGenericContainerImpl {
   def impl(c: whitebox.Context)(annottees: c.Expr[Any]*): c.Expr[Any] = {
     import c.universe._
 
+    val schemaString: String = c.prefix.tree match {
+      case q"new $name( ..$params )" if params.length == 1 => params.head.toString.filterNot(_ == '\\').drop(1).dropRight(1)
+      case q"new $name( ..$params )" => c.abort(c.enclosingPosition, "Only one annotation parameter is accepted")
+      case _ => c.abort(c.enclosingPosition, "No parameters found for annotation")
+    }
+    val record: Record = decode[Record](schemaString) match {
+      case Right(record) => record
+      case Left(err) => c.abort(c.enclosingPosition, s"Schema Parse Error: $schemaString: $err")
+    }
 
     def modifiedClass(classDecl: ClassDef) = {
       val (className, fields) = try {
@@ -28,23 +41,9 @@ object AsGenericContainerImpl {
       } catch {
         case _: MatchError => c.abort(c.enclosingPosition, "Annotation is only supported on case class")
       }
-      val recordRep: Record = fields.length match {
-        case 0 => c.abort(c.enclosingPosition, "Cannot annotate classes with no fields")
-        case _ =>
-          Record(className.toString().refineF, None, None, None, NonEmptyList(Field(
-            "field_name".refineF,
-            None,
-            StringType
-          ), Nil)
-          )
-      }
 
-      println(recordRep)
-      val schemaJson: String = recordRep.asJson.noSpaces
-      println(schemaJson)
       val params = fields.asInstanceOf[List[ValDef]] map { p => p.duplicate}
-      val schema = new Schema.Parser().parse(schemaJson)
-      val theDef = s"""override def getSchema(): org.apache.avro.Schema = new Schema.Parser().parse($schemaJson)"""
+      val theDef = q"""override def getSchema(): org.apache.avro.Schema = new org.apache.avro.Schema.Parser().parse($schemaString)"""
       val r = c.Expr[Any](
         q"""
         case class $className ( ..$params ) extends org.apache.avro.generic.GenericContainer {
@@ -52,7 +51,6 @@ object AsGenericContainerImpl {
         }
         """
       )
-      println(r)
       r
     }
 
