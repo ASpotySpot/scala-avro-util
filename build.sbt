@@ -5,12 +5,11 @@ lazy val commonSettings = Seq(
   resolvers += Resolver.jcenterRepo,
   scalacOptions ++= scalacFlags,
   libraryDependencies ++= Seq(
-    "org.typelevel" %% "cats-core" % "1.2.0",
-    "eu.timepit" %% "refined" % "0.9.2",
+    "org.typelevel" %% "cats-core" % "1.0.1",
+    "eu.timepit" %% "refined" % "0.9.0",
     "eu.timepit" %% "refined-scalacheck" % "0.9.2" % Test,
     "org.scalacheck" %% "scalacheck" % "1.14.0" % Test,
-    "org.scalatest" %% "scalatest" % "3.0.5" % Test,
-    "com.github.alexarchambault" %% "scalacheck-shapeless_1.13" % "1.1.6" % Test
+    "org.scalatest" %% "scalatest" % "3.0.5" % Test
   ),
   sourceGenerators in Compile +=(avroScalaGenerate in Compile).taskValue
 )
@@ -66,8 +65,19 @@ lazy val plugin = (project in file("plugin")).
   dependsOn(schema, builder).
   settings(
     name := "scalavro-sbt",
-    dependencyOverrides += "org.spire-math" % "jawn-parser_2.11" % "0.11.1",
-    sbtPlugin := true
+    sbtPlugin := true,
+    test in assembly := {},
+//    logLevel in assembly := Level.Debug,
+    assemblyOption in assembly := (assemblyOption in assembly).value.copy(includeScala = false),
+    assemblyShadeRules in assembly := Seq(
+      ShadeRule.rename("io.circe.**" -> "shaded.circe.@1").inAll,
+      ShadeRule.rename("jawn.**" -> "shaded.jawn.@1").inAll
+    ),
+    artifact in (Compile, assembly) := {
+      val art = (artifact in (Compile, assembly)).value
+      art.withClassifier(Some("assembly"))
+    },
+    addArtifact(artifact in (Compile, assembly), assembly)
   )
 
 lazy val root = (project in file(".")).

@@ -49,6 +49,10 @@ class AvroADTParser(val universe: Universe) {
   }
 
   private def typeToTypeTree(ns: NonEmptyString, `type`: AvscType): StuffContext[Tree] = `type` match {
+    case BytesType => StuffContext.empty(AppliedTypeTree(
+      Ident(TypeName("Array")),
+      List(Ident(TypeName("Bytes")))
+    ))
     case tn: SimpleAvscType => StuffContext.empty(Ident(typeToTypeName(tn)))
     case r: Record => StuffContext(Ident(TypeName(r.name.value)), StuffToBuild(List(r), List.empty))
     case EnumType(name, _, _, _, symbols) => StuffContext(Ident(TypeName(name.value)), StuffToBuild(List.empty, List((ns, name, symbols))))
