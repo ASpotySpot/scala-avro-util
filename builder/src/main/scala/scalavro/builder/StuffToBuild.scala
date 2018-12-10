@@ -1,4 +1,4 @@
-package scalavro.schema.builder
+package scalavro.builder
 
 import cats.data.NonEmptyList
 import eu.timepit.refined.types.string.NonEmptyString
@@ -11,6 +11,4 @@ case class StuffToBuild(records: List[Record],
 
 private object StuffToBuild {
   def empty: StuffToBuild = StuffToBuild(List.empty, List.empty)
-
-  def flatten(stuffs: List[StuffToBuild]): StuffToBuild = stuffs.reduceOption(_ |+| _).getOrElse(StuffToBuild.empty)
 }

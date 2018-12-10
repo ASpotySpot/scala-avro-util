@@ -29,8 +29,8 @@ object AvscType {
     case "Long" => LongType
     case "Float" => FloatType
     case "Double" => DoubleType
-    case "Array[Byte]" => BytesType
     case "String" => StringType
+    case "ByteBuffer" | "java.nio.ByteBuffer" => BytesType
   }
 }
 

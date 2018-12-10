@@ -22,6 +22,7 @@ class AsIndexedRecord(schema: String) extends StaticAnnotation {
 
 object AsIndexedRecordImpl {
   def impl(c: whitebox.Context)(annottees: c.Expr[Any]*): c.Expr[Any] = {
+
     type CT = c.universe.Tree
     import c.universe._
 
@@ -34,6 +35,30 @@ object AsIndexedRecordImpl {
       case Right(record) => record
       case Left(err) => c.abort(c.enclosingPosition, s"Schema Parse Error: $schemaString: $err")
     }
+
+
+    val cop: TypeName = TypeName("$colon$plus$colon")
+    def buildUnion(types: List[AvscType]): Tree = {
+      if (types.length == 1) {
+        typeToTree(types.head)
+      } else {
+        types.foldLeft(Ident(TypeName("CNil")): Tree) { case (tree, next) =>
+          AppliedTypeTree(Ident(cop), List(typeToTree(next), tree))
+        }
+      }
+    }
+    def wrapInOption(tree: Tree): Tree = {
+      AppliedTypeTree(
+        Ident(TypeName("Option")),
+        List(tree)
+      )
+    }
+    def recbyNameToTypeName(ns: String): Tree = {
+      val split = ns.split('.')
+      split.tail.foldLeft(Ident(TypeName(split.head)): RefTree) {case (tn, s) =>
+        Select(tn, TypeName(s))
+      }
+    }
     def typeToTree(avscType: AvscType): c.universe.Tree = avscType match {
       case NullType => Ident(TypeName("Null"))
       case BoolType => Ident(TypeName("Boolean"))
@@ -41,13 +66,17 @@ object AsIndexedRecordImpl {
       case LongType => Ident(TypeName("Long"))
       case FloatType => Ident(TypeName("Float"))
       case DoubleType => Ident(TypeName("Double"))
-      case BytesType =>
-        AppliedTypeTree(
-          Ident(TypeName("Array")),
-          List(Ident(TypeName("Byte")))
-        )
+      case BytesType => Select(Select(Ident(TermName("java")), TermName("nio")), TypeName("ByteBuffer"))
       case StringType => Ident(TypeName("String"))
-      case Union(_) => ???
+      case Union(types) =>
+        val containsNull = types.toList.contains(NullType)
+        val notNulls = types.filter(_ != NullType)
+        val baseUnion = buildUnion(notNulls)
+        if (containsNull) {
+          wrapInOption(baseUnion)
+        } else {
+          baseUnion
+        }
       case ArrayType(a) => AppliedTypeTree(
         Ident(TypeName("Array")),
         List(typeToTree(a))
@@ -56,11 +85,13 @@ object AsIndexedRecordImpl {
         Ident(TypeName("Map")),
         List(typeToTree(a))
       )
-      case EnumType(_, _, _, _, _) => ???
+      case EnumType(name, _, _, _, symbols) =>
+        recbyNameToTypeName(s"${name.value}")
       case Fixed(_, _, _, _) => ???
-      case Record(_, _, _, _, _) => ???
+      case r: Record => recbyNameToTypeName(s"${r.name.value}")
       case RecordByName(name) => Ident(TypeName(name))
     }
+
 
     val importsDef: CT = q"""import scalavro.schema.parser.AvscParser._"""
     val schemaDef: CT = q"""override def getSchema(): org.apache.avro.Schema = new org.apache.avro.Schema.Parser().parse($schemaString)"""
@@ -80,7 +111,13 @@ object AsIndexedRecordImpl {
         val q"case class $className(..$fields) " = classDecl
         (className, fields)
       } catch {
-        case _: MatchError => c.abort(c.enclosingPosition, "Annotation is only supported on case class")
+        case _: MatchError =>
+          try {
+            val q"case class $className(..$fields) {$body}" = classDecl
+            (className, fields)
+          } catch {
+            case _: MatchError => c.abort(c.enclosingPosition, "Annotation is only supported on case class")
+          }
       }
 
       val params = fields.asInstanceOf[List[ValDef]] map { p => p.duplicate}
@@ -95,8 +132,6 @@ object AsIndexedRecordImpl {
         }
         """
       )
-      println(classDecl)
-      println(r)
       r
     }
 

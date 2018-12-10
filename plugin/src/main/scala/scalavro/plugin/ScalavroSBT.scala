@@ -15,7 +15,7 @@ object ScalavroSBT extends AutoPlugin {
   override def trigger = allRequirements
 
   object autoImport {
-    val scalavroTask = taskKey[Unit]("ScalavroGenerate")
+    val scalavroTask = taskKey[Seq[File]]("ScalavroGenerate")
     val avroSrcDir = settingKey[Seq[File]]("Directories of Avro Schemas")
     val avroTgtDir = settingKey[File]("Directory to output files to")
     val cacheGenerate = settingKey[Boolean]("Directory to output files to")
@@ -39,7 +39,7 @@ object ScalavroSBT extends AutoPlugin {
         identity[Set[File] => Set[File]] _
       }
       val inputs = avroSrcDir.value.flatMap(_.listFiles()).toSet
-      cacheFunc(compile(_, tgt))(inputs)
+      cacheFunc(compile(_, tgt))(inputs).toSeq
     }
   )
 

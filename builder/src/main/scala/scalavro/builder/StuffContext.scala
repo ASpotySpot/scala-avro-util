@@ -1,5 +1,6 @@
-package scalavro.schema.builder
+package scalavro.builder
 
+import cats.Now
 import cats.data.NonEmptyList
 
 case class StuffContext[A](a: A, stuff: StuffToBuild) {
@@ -12,11 +13,13 @@ private object StuffContext {
   def empty[A](a: A): StuffContext[A] = new StuffContext[A](a, StuffToBuild.empty)
 
   def sequence[A](ls: NonEmptyList[StuffContext[A]]): StuffContext[List[A]] = {
-    ls.foldLeft(StuffContext.empty(List.empty[A])) { (ctxAs, ctxA) =>
-      for {
-        as <- ctxAs
-        a <- ctxA
-      } yield a :: as
+    ls.foldRight(Now(StuffContext.empty(List.empty[A]))) { (ctxA, ctxEAs) =>
+      ctxEAs.map { ctxAs =>
+        for {
+          as <- ctxAs
+          a <- ctxA
+        } yield a :: as
+      }
     }
-  }
+  }.value
 }

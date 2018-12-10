@@ -1,20 +1,8 @@
 package scalavro.macros
 
-
-import cats.data.NonEmptyList
-import scalavro.util.RefineUtils._
-import io.circe.syntax._
-import io.circe.generic._
-import io.circe.parser._
-import scalavro.schema.parser.AvscParser._
-import org.apache.avro.Schema
-import scalavro.schema._
-import scalavro.schema.parser.AvscParser
-
 import scala.annotation.StaticAnnotation
 import scala.language.experimental.macros
 import scala.reflect.macros.whitebox
-import scala.util.Failure
 
 class AsGenericContainer(schema: String) extends StaticAnnotation {
   def macroTransform(annottees: Any*): Any = macro AsGenericContainerImpl.impl
@@ -28,10 +16,6 @@ object AsGenericContainerImpl {
       case q"new $name( ..$params )" if params.length == 1 => params.head.toString.filterNot(_ == '\\').drop(1).dropRight(1)
       case q"new $name( ..$params )" => c.abort(c.enclosingPosition, "Only one annotation parameter is accepted")
       case _ => c.abort(c.enclosingPosition, "No parameters found for annotation")
-    }
-    val record: Record = decode[Record](schemaString) match {
-      case Right(record) => record
-      case Left(err) => c.abort(c.enclosingPosition, s"Schema Parse Error: $schemaString: $err")
     }
 
     def modifiedClass(classDecl: ClassDef) = {

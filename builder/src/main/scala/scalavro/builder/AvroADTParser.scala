@@ -1,10 +1,12 @@
-package scalavro.schema.builder
+package scalavro.builder
 
 import cats.data.NonEmptyList
 import eu.timepit.refined.types.string.NonEmptyString
 import scalavro.schema._
+import io.circe.syntax._
 
 import scala.reflect.api.Universe
+import scalavro.schema.parser.AvscParser._
 
 object AvroADTParser {
   def apply(): AvroADTParser ={
@@ -25,7 +27,7 @@ class AvroADTParser(val universe: Universe) {
   def buildAllClasses(record: Record): List[universe.PackageDef] = {
     assert(record.namespace.isDefined, "Parent Record Must have a namespace")
     val packages = buildStuff(record.namespace.get, StuffToBuild(List(record), List.empty))
-    packages.groupBy(p => fullPackageName(p)).map{
+    val result = packages.groupBy(p => fullPackageName(p)).map{
       case (_, pkgs) =>
         val pkgTree = PackageDef.unapply(pkgs.head).map(_._1).get
         val allTree = pkgs.flatMap {
@@ -33,29 +35,27 @@ class AvroADTParser(val universe: Universe) {
         }
         PackageDef(pkgTree, distinctAndSortMembers(allTree))
     }.toList
+    result
   }
 
-
-  private def typeToTypeName(`type`: SimpleAvscType): TypeName = `type` match {
-    case NullType => TypeName("Null")
-    case BoolType => TypeName("Boolean")
-    case IntType => TypeName("Int")
-    case LongType => TypeName("Long")
-    case FloatType => TypeName("Float")
-    case DoubleType => TypeName("Double")
-    case StringType => TypeName("String")
-    case BytesType => ???
-    case RecordByName(name: String) => TypeName(name)
+  private def typeToTypeName(`type`: SimpleAvscType, ns: String): Tree = `type` match {
+    case NullType => tq"Null"
+    case BoolType => tq"Boolean"
+    case IntType => tq"Int"
+    case LongType => tq"Long"
+    case FloatType => tq"Float"
+    case DoubleType => tq"Double"
+    case StringType => tq"String"
+    case BytesType => tq"java.nio.ByteBuffer"
+    case RecordByName(name: String) => nsToPackage(s"${ns.value}.${name.value}")
   }
 
   private def typeToTypeTree(ns: NonEmptyString, `type`: AvscType): StuffContext[Tree] = `type` match {
-    case BytesType => StuffContext.empty(AppliedTypeTree(
-      Ident(TypeName("Array")),
-      List(Ident(TypeName("Bytes")))
-    ))
-    case tn: SimpleAvscType => StuffContext.empty(Ident(typeToTypeName(tn)))
-    case r: Record => StuffContext(Ident(TypeName(r.name.value)), StuffToBuild(List(r), List.empty))
-    case EnumType(name, _, _, _, symbols) => StuffContext(Ident(TypeName(name.value)), StuffToBuild(List.empty, List((ns, name, symbols))))
+    case tn: SimpleAvscType => StuffContext.empty(typeToTypeName(tn, ns.value))
+    case r: Record => StuffContext(nsToPackage(s"${ns.value}.${r.name.value}"), StuffToBuild(List(r), List.empty))
+    case EnumType(name, _, _, _, symbols) =>
+      val t = nsToPackage(s"${ns.value}.${name.value}")
+      StuffContext(t, StuffToBuild(List.empty, List((ns, name, symbols))))
 
     case ArrayType(itemType) => for {
       typeTree <- typeToTypeTree(ns, itemType)
@@ -67,7 +67,7 @@ class AvroADTParser(val universe: Universe) {
       typeTree <- typeToTypeTree(ns, valueType)
     } yield AppliedTypeTree(
       Ident(TypeName("Map")),
-      List(typeTree)
+      List(Ident(TypeName("String")), typeTree)
     )
     case Union(types) =>
       val containsNull = types.toList.contains(NullType)
@@ -80,7 +80,7 @@ class AvroADTParser(val universe: Universe) {
           baseUnion
         }
       }
-    case _: Fixed => ???
+    case _: Fixed => StuffContext.empty(tq"Array[Byte]")
   }
 
 
@@ -138,10 +138,36 @@ class AvroADTParser(val universe: Universe) {
     }
   }
 
+  private def fieldToDefaultValues(fs: NonEmptyList[Field]): List[Literal] = {
+    fs.map(_.`type`).map {
+      case BoolType => Literal(Constant(false))
+      case DoubleType | FloatType | IntType | LongType => Literal(Constant(-1))
+      case _ => Literal(Constant(null))
+    }.toList
+  }
+
+  private def fieldsToDefaultConstrcutor(ns: NonEmptyString, fs: NonEmptyList[Field]): DefDef = {
+    DefDef(
+      Modifiers(),
+      termNames.CONSTRUCTOR,
+      List(),
+      List(List()),
+      TypeTree(),
+      Block(
+        List(
+          Apply(Ident(termNames.CONSTRUCTOR), fieldToDefaultValues(fs))
+        ),
+        Literal(Constant(()))
+      )
+    )
+
+  }
+
   private def fieldsToTemplate(ns: NonEmptyString, fs: NonEmptyList[Field]): StuffContext[Template] = for {
     valDefs <- StuffContext.sequence(fs.map(f => fieldToCCParam(ns, f)))
     defDefs <- fieldsToConstrcutor(ns, fs)
-  } yield tmpl(valDefs ::: List(defDefs))
+    defDefaultDefs = fieldsToDefaultConstrcutor(ns, fs)
+  } yield tmpl(valDefs ::: List(defDefs, defDefaultDefs))
 
   private def tmpl(body: List[Tree]): Template = Template(
     List(
@@ -163,7 +189,9 @@ class AvroADTParser(val universe: Universe) {
     trees.groupBy{
       case cd: ClassDef => cd.name
       case mod: ModuleDef => mod.name
+      case imp: Import => imp.toString()
     }.map{case (_, x) => x.head}.toList.sortBy{
+      case imp: Import => 0  -> imp.toString()
       case ClassDef(m, n, _, _) => if(m.hasFlag(SEALED)) 1 -> n.toString else 3 -> n.toString
       case mod: ModuleDef => 2 -> mod.name.toString
     }
@@ -188,20 +216,27 @@ class AvroADTParser(val universe: Universe) {
     pkgs1 ++ pkgs2
   }
 
-  private def nsToPackage(ns: NonEmptyString): RefTree = {
-    val split = ns.value.split('.')
+  private def nsToPackage(ns: String): RefTree = {
+    val split = ns.split('.')
     split.tail.foldLeft(Ident(TermName(split.head)): RefTree) { case (tn, s) =>
       Select(tn, TermName(s))
     }
   }
 
+
   private def buildSingleClass(ns: NonEmptyString, record: Record): StuffContext[PackageDef] = {
     fieldsToTemplate(record.namespace.getOrElse(ns), record.fields).map { tmpl =>
       PackageDef(
-        nsToPackage(record.namespace.getOrElse(ns)),
+        nsToPackage(record.namespace.getOrElse(ns).value),
         List(
+          Import(Select(Ident(TermName("scalavro")), TermName("macros")), List(ImportSelector(TermName("AsIndexedRecord"), 37, TermName("AsIndexedRecord"), 37))),
           ClassDef(
-            Modifiers(universe.Flag.CASE, typeNames.EMPTY),
+            Modifiers(universe.Flag.CASE, typeNames.EMPTY, List(
+              Apply(
+                Select(New(Ident(TypeName("AsIndexedRecord"))), termNames.CONSTRUCTOR),
+                List(Literal(Constant(record.asJson.noSpaces)))
+              )
+            )),
             TypeName(record.name.value),
             List.empty,
             tmpl
@@ -246,7 +281,7 @@ class AvroADTParser(val universe: Universe) {
       )
     }
     PackageDef(
-      nsToPackage(ns),
+      nsToPackage(ns.value),
       (baseClass :: caseObjects).toList
     )
   }

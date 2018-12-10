@@ -97,4 +97,16 @@ class AvscArb extends FlatSpec with Checkers with Matchers {
         throw ex
     }
   }
+
+  it should "retain ordering" in {
+    val schemaJson = "{\"namespace\":\"tomw\",\"name\":\"MyClass\",\"fields\":[{\"name\":\"a\",\"type\":\"int\"},{\"name\":\"s\",\"type\":\"string\"},{\"name\":\"f\",\"type\":\"float\"},{\"name\":\"bts\",\"type\":\"bytes\"}],\"type\":\"record\"}"
+    val record = decode[Record](schemaJson)
+    val expected = List(
+      Field("a", None, IntType),
+      Field("s", None, StringType),
+      Field("f", None, FloatType),
+      Field("bts", None, BytesType)
+    )
+    record.right.get.fields.toList should contain theSameElementsInOrderAs expected
+  }
 }
