@@ -45,19 +45,26 @@ class AvroADTParserTest extends FlatSpec with Checkers with Matchers {
 
   it should "repeate special case of arb" in {
     val parser = AvroADTParser.apply()
-    val r = Record(refineMV[NonEmpty]("f"),Some(refineMV[NonEmpty]("ns")),None,None,NonEmptyList(
-      Field(refineMV[NonEmpty]("k"),None,FloatType),
-      List.empty
+    val r = Record(
+      refineMV[NonEmpty]("a"),
+      Some(refineMV[NonEmpty]("ns")),
+      None,
+      None,
+      NonEmptyList(
+        Field(
+          refineMV[NonEmpty]("e"),
+          None,
+          Union(NonEmptyList(DoubleType, List(NullType, IntType)))
+        ),
+        List.empty
+      )
     )
-    )
-
 
     val code = parser.buildAllClassesAsStr(r).mkString("\n")
     println(code)
     val toolbox = currentMirror.mkToolBox()
     val _ = toolbox.parse(code)
-//    val compiledCode = toolbox.compile(tree)
-//    compiledCode()
+    println(code)
   }
 
   it should "parse this and preserve ordering" in {
@@ -92,11 +99,28 @@ class AvroADTParserTest extends FlatSpec with Checkers with Matchers {
     result shouldEqual expected
   }
 
+  it should "handle cases with Maps" in {
+    val input = Record(
+      refineMV[NonEmpty]("MyClass"),
+      Some(refineMV[NonEmpty]("tomw")),
+      None,
+      None,
+      NonEmptyList(
+        Field(refineMV[NonEmpty]("a"), None, MapType(IntType)),
+        List.empty
+      )
+    )
+    val parser = AvroADTParser.apply()
+    val code = parser.buildAllClassesAsStr(input).mkString("\n")
+    val toolbox = currentMirror.mkToolBox()
+    val _ = toolbox.parse(code)
+  }
+
   it should "handle this big example" in {
     val record = decode[Record](bigInput).right.get
-    val result = AvroADTParser().buildAllClassesAsStr(record)
-    result.foreach(println)
-
+    val code = AvroADTParser().buildAllClassesAsStr(record)
+    val toolbox = currentMirror.mkToolBox()
+    val _ = toolbox.parse(code.mkString("\n"))
   }
 
   val bigInput =

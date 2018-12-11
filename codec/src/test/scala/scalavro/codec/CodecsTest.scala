@@ -21,9 +21,9 @@ object CodecsTest extends Properties("AvroCodecs") {
       enc.flush()
       baos.flush()
       val expected = baos.toByteArray.mkString(",")
-      val result = c.encode(a).getOrElse(???)
+      val result = c.encode(a).getOrElse(throw new Exception("Test: Failed to encode"))
       val encodeResult = result.toByteArray.mkString(",") == expected
-      val decodeResult = eq(c.decode(result).getOrElse(???).value, a)
+      val decodeResult = eq(c.decode(result).getOrElse(throw new Exception("Test: Failed to decode")).value, a)
       decodeResult && encodeResult
     }
   }
@@ -39,7 +39,7 @@ object CodecsTest extends Properties("AvroCodecs") {
       baos.flush()
       val expectedEncode = baos.toByteArray
       val encodeResult = as.foldLeft(BitVector.empty){(bv, a) =>
-        bv ++ codec(a).encode(a).getOrElse(???)
+        bv ++ codec(a).encode(a).getOrElse(throw new Exception("Test: Failed to encode"))
       }
       val encodeBool = encodeResult.toByteArray.mkString(",") == expectedEncode.mkString(",")
       def doDecode(bv: BitVector): List[A] = {

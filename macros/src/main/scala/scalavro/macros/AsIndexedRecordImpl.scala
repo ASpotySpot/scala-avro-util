@@ -24,6 +24,7 @@ object AsIndexedRecordImpl {
   def impl(c: whitebox.Context)(annottees: c.Expr[Any]*): c.Expr[Any] = {
 
     type CT = c.universe.Tree
+    Test.tree(c.universe): c.universe.Tree
     import c.universe._
 
     val schemaString: String = c.prefix.tree match {
@@ -87,7 +88,7 @@ object AsIndexedRecordImpl {
       )
       case EnumType(name, _, _, _, symbols) =>
         recbyNameToTypeName(s"${name.value}")
-      case Fixed(_, _, _, _) => ???
+      case Fixed(_, _, _, _) => q"Array[Byte]"
       case r: Record => recbyNameToTypeName(s"${r.name.value}")
       case RecordByName(name) => Ident(TypeName(name))
     }

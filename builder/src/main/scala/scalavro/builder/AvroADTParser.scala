@@ -47,35 +47,25 @@ class AvroADTParser(val universe: Universe) {
     case DoubleType => tq"Double"
     case StringType => tq"String"
     case BytesType => tq"java.nio.ByteBuffer"
-    case RecordByName(name: String) => nsToPackage(s"${ns.value}.${name.value}")
+    case RecordByName(name: String) => tq"${TypeName(s"${ns.value}.${name.value}")}"
   }
 
   private def typeToTypeTree(ns: NonEmptyString, `type`: AvscType): StuffContext[Tree] = `type` match {
     case tn: SimpleAvscType => StuffContext.empty(typeToTypeName(tn, ns.value))
-    case r: Record => StuffContext(nsToPackage(s"${ns.value}.${r.name.value}"), StuffToBuild(List(r), List.empty))
+    case r: Record => StuffContext(tq"${TypeName(s"${ns.value}.${r.name.value}")}", StuffToBuild(List(r), List.empty))
     case EnumType(name, _, _, _, symbols) =>
       val t = nsToPackage(s"${ns.value}.${name.value}")
       StuffContext(t, StuffToBuild(List.empty, List((ns, name, symbols))))
 
-    case ArrayType(itemType) => for {
-      typeTree <- typeToTypeTree(ns, itemType)
-    } yield AppliedTypeTree(
-      Ident(TypeName("Array")),
-      List(typeTree)
-    )
-    case MapType(valueType) => for {
-      typeTree <- typeToTypeTree(ns, valueType)
-    } yield AppliedTypeTree(
-      Ident(TypeName("Map")),
-      List(Ident(TypeName("String")), typeTree)
-    )
+    case ArrayType(itemType) => typeToTypeTree(ns, itemType).map(t => tq"Array[$t]")
+    case MapType(valueType) => typeToTypeTree(ns, valueType).map(t => tq"Map[..${Seq(tq"String", tq"$t")}]")
     case Union(types) =>
       val containsNull = types.toList.contains(NullType)
       val notNulls = types.filter(_ != NullType)
       val baseUnionCtx = buildUnion(ns, notNulls)
       baseUnionCtx.map { baseUnion =>
         if (containsNull) {
-          wrapInOption(baseUnion)
+          q"Option[$baseUnion]"
         } else {
           baseUnion
         }
@@ -83,31 +73,24 @@ class AvroADTParser(val universe: Universe) {
     case _: Fixed => StuffContext.empty(tq"Array[Byte]")
   }
 
-
-  private def wrapInOption(tree: Tree): Tree = {
-    AppliedTypeTree(
-      Ident(TypeName("Option")),
-      List(tree)
-    )
-  }
-
-  private val cop: TypeName = TypeName("$colon$plus$colon")
+  private val cop: TermName = TermName("$colon$plus$colon")
 
   private def buildUnion(ns: NonEmptyString, types: List[AvscType]): StuffContext[Tree] = {
     if (types.length == 1) {
       typeToTypeTree(ns, types.head)
     } else {
-      types.foldLeft(StuffContext.empty(Ident(TypeName("CNil")): Tree)) { case (ctx, next) =>
+      types.foldLeft(StuffContext.empty(tq"CNil": Tree)) { case (ctx, next) =>
         for {
           tree <- ctx
           nextTree <- typeToTypeTree(ns, next)
-        } yield AppliedTypeTree(Ident(cop), List(nextTree, tree))
+        } yield q"$cop[..${List(nextTree, tree)}]"
       }
     }
   }
 
-  private def fieldToCCParam(ns: NonEmptyString, field: Field): StuffContext[ValDef] =
+  private def fieldToCCParam(ns: NonEmptyString, field: Field): StuffContext[ValDef] = {
     fieldToValDefs(ns, field, Modifiers(MUTABLE | CASEACCESSOR | PARAMACCESSOR))
+  }
 
   private def fieldToConstParam(ns: NonEmptyString, field: Field): StuffContext[ValDef] =
     fieldToValDefs(ns, field, Modifiers(universe.Flag.PARAM | universe.Flag.PARAMACCESSOR))
@@ -147,20 +130,7 @@ class AvroADTParser(val universe: Universe) {
   }
 
   private def fieldsToDefaultConstrcutor(ns: NonEmptyString, fs: NonEmptyList[Field]): DefDef = {
-    DefDef(
-      Modifiers(),
-      termNames.CONSTRUCTOR,
-      List(),
-      List(List()),
-      TypeTree(),
-      Block(
-        List(
-          Apply(Ident(termNames.CONSTRUCTOR), fieldToDefaultValues(fs))
-        ),
-        Literal(Constant(()))
-      )
-    )
-
+    q"def this() = this(..${fieldToDefaultValues(fs)})".asInstanceOf[DefDef]
   }
 
   private def fieldsToTemplate(ns: NonEmptyString, fs: NonEmptyList[Field]): StuffContext[Template] = for {
@@ -171,14 +141,8 @@ class AvroADTParser(val universe: Universe) {
 
   private def tmpl(body: List[Tree]): Template = Template(
     List(
-      Select(
-        Ident(TermName("scala")),
-        TypeName("Product")
-      ),
-      Select(
-        Ident(TermName("scala")),
-        TypeName("Serializable")
-      )
+      tq"scala.Product",
+      tq"scala.Serializable"
     ),
     noSelfType,
     body
@@ -247,42 +211,11 @@ class AvroADTParser(val universe: Universe) {
   }
 
   private def buildSingleEnum(ns: NonEmptyString, base: NonEmptyString, values: NonEmptyList[NonEmptyString]): PackageDef = {
-    val baseClass = ClassDef(
-      Modifiers(ABSTRACT | INTERFACE | SEALED | DEFAULTPARAM),
-      TypeName(base.value),
-      List.empty,
-      Template(
-        List(Select(Ident(TermName("scala")), TypeName("AnyRef"))),
-        noSelfType,
-        List.empty
-      )
-    )
-    val caseObjects = values.map { value =>
-      ModuleDef(
-        Modifiers(CASE),
-        TermName(value.value),
-        Template(
-          List(
-            Ident(TypeName(base.value)),
-            Select(Ident(TermName("scala")), TypeName("Product")),
-            Select(Ident(TermName("scala")), TypeName("Serializable"))
-          ),
-          noSelfType,
-          List(DefDef(
-            Modifiers(),
-            termNames.CONSTRUCTOR,
-            List.empty,
-            List(List.empty),
-            TypeTree(),
-            Block(List(pendingSuperCall), Literal(Constant(()))
-            )
-          ))
-        )
-      )
-    }
-    PackageDef(
-      nsToPackage(ns.value),
-      (baseClass :: caseObjects).toList
-    )
+    val baseName: TypeName = TypeName(base.value)
+    val baseClass = q"sealed trait $baseName"
+    val objs = baseClass :: values.map{value =>
+      q"case object ${TermName(value.value)} extends $baseName"
+    }.toList
+    q"package ${nsToPackage(ns.value)} {..$objs}".asInstanceOf[PackageDef]
   }
 }

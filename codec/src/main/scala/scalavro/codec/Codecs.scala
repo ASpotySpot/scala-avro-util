@@ -6,8 +6,6 @@ import shapeless.{Generic, HList}
 
 
 trait Codecs {
-  def apply[A](a: A)(implicit codec: Codec[A]): Array[Byte] = codec.encode(a).getOrElse(???).toByteArray
-
   object implicits {
     implicit val int: Codec[Int] = intCodec
     implicit val long: Codec[Long] = longCodec
