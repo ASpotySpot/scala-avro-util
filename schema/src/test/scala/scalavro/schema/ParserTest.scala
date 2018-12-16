@@ -4,6 +4,7 @@ import cats.data.NonEmptyList
 import eu.timepit.refined.collection.NonEmpty
 import eu.timepit.refined.refineMV
 import org.scalatest.FlatSpec
+import scalavro.schema.types.AvscType._
 
 class ParserTest extends FlatSpec {
 
@@ -19,11 +20,11 @@ class ParserTest extends FlatSpec {
     None,
     None,
     NonEmptyList(
-      Field(refineMV[NonEmpty]("id"), None, IntType),
+      Field(refineMV[NonEmpty]("id"), None, IntType)(None),
       List(
-        Field(refineMV[NonEmpty]("username"), None, StringType),
-        Field(refineMV[NonEmpty]("passwordHash"), None, StringType),
-        Field(refineMV[NonEmpty]("signupDate"), None, LongType),
+        Field(refineMV[NonEmpty]("username"), None, StringType)(None),
+        Field(refineMV[NonEmpty]("passwordHash"), None, StringType)(None),
+        Field(refineMV[NonEmpty]("signupDate"), None, LongType)(None),
         Field(
           refineMV[NonEmpty]("emailAddresses"),
           None,
@@ -34,15 +35,16 @@ class ParserTest extends FlatSpec {
               None,
               None,
               NonEmptyList(
-                Field(refineMV[NonEmpty]("address"), None, StringType),
+                Field(refineMV[NonEmpty]("address"), None, StringType)(None),
                 List(
-                  Field(refineMV[NonEmpty]("verified"), None, BoolType),
-                  Field(refineMV[NonEmpty]("dateAdded"), None, LongType),
-                  Field(refineMV[NonEmpty]("dateBounced"), None, Union(NonEmptyList(NullType, List(LongType)))),
+                  Field(refineMV[NonEmpty]("verified"), None, BoolType)(None),
+                  Field(refineMV[NonEmpty]("dateAdded"), None, LongType)(None),
+                  Field(refineMV[NonEmpty]("dateBounced"), None, Union(NonEmptyList(NullType, List(LongType))))(None),
                 )
               )
-            ))
-        ),
+            )
+          )
+        )(None),
         Field(
           refineMV[NonEmpty]("twitterAccounts"),
           None,
@@ -71,17 +73,18 @@ class ParserTest extends FlatSpec {
                       )
                     )
                   )
-                ),
+                )(None),
                 List(
-                  Field(refineMV[NonEmpty]("userId"), None, LongType),
-                  Field(refineMV[NonEmpty]("screenName"), None, StringType),
-                  Field(refineMV[NonEmpty]("oauthToken"), None, StringType),
-                  Field(refineMV[NonEmpty]("oauthTokenSecret"), None, Union(NonEmptyList(NullType, List(StringType)))),
-                  Field(refineMV[NonEmpty]("dateAuthorized"), None, LongType),
+                  Field(refineMV[NonEmpty]("userId"), None, LongType)(None),
+                  Field(refineMV[NonEmpty]("screenName"), None, StringType)(None),
+                  Field(refineMV[NonEmpty]("oauthToken"), None, StringType)(None),
+                  Field(refineMV[NonEmpty]("oauthTokenSecret"), None, Union(NonEmptyList(NullType, List(StringType))))(None),
+                  Field(refineMV[NonEmpty]("dateAuthorized"), None, LongType)(None),
                 )
               )
-            ))
-        ),
+            )
+          )
+        )(None),
         Field(
           refineMV[NonEmpty]("toDoItems"),
           None,
@@ -110,16 +113,17 @@ class ParserTest extends FlatSpec {
                       )
                     )
                   )
-                ),
+                )(None),
                 List(
-                  Field(refineMV[NonEmpty]("title"), None, StringType),
-                  Field(refineMV[NonEmpty]("description"), None, Union(NonEmptyList(NullType, List(StringType)))),
-                  Field(refineMV[NonEmpty]("snoozeDate"), None, Union(NonEmptyList(NullType, List(LongType)))),
-                  Field(refineMV[NonEmpty]("subItems"), None, ArrayType(RecordByName("ToDoItem")))
+                  Field(refineMV[NonEmpty]("title"), None, StringType)(None),
+                  Field(refineMV[NonEmpty]("description"), None, Union(NonEmptyList(NullType, List(StringType))))(None),
+                  Field(refineMV[NonEmpty]("snoozeDate"), None, Union(NonEmptyList(NullType, List(LongType))))(None),
+                  Field(refineMV[NonEmpty]("subItems"), None, ArrayType(RecordByName("ToDoItem")))(None)
                 )
               )
-            ))
-        )
+            )
+          )
+        )(None)
       )
     )
   )
@@ -129,18 +133,18 @@ class ParserTest extends FlatSpec {
     None,
     None,
     NonEmptyList(
-      Field(refineMV[NonEmpty]("union1"), None, Union(NonEmptyList(StringType, List(IntType)))),
+      Field(refineMV[NonEmpty]("union1"), None, Union(NonEmptyList(StringType, List(IntType))))(None),
       List(
         Field(
           refineMV[NonEmpty]("union2"),
           None,
           Union(NonEmptyList(NullType, List(IntType)))
-        ),
+        )(None),
         Field(
           refineMV[NonEmpty]("union3"),
           None,
-          Union(NonEmptyList(NullType, List(IntType, StringType)))
-        ),
+          Union(NonEmptyList(NullType, List(IntType, StringType))),
+        )(None),
         Field(
           refineMV[NonEmpty]("union4"),
           None,
@@ -154,14 +158,14 @@ class ParserTest extends FlatSpec {
                   None,
                   None,
                   NonEmptyList(
-                    Field(refineMV[NonEmpty]("int"), None, IntType),
+                    Field(refineMV[NonEmpty]("int"), None, IntType)(None),
                     List.empty
                   )
                 )
               )
             )
           )
-        ),
+        )(None),
         Field(
           refineMV[NonEmpty]("union4"),
           None,
@@ -176,14 +180,14 @@ class ParserTest extends FlatSpec {
                   None,
                   None,
                   NonEmptyList(
-                    Field(refineMV[NonEmpty]("int"), None, IntType),
+                    Field(refineMV[NonEmpty]("int"), None, IntType)(None),
                     List.empty
                   )
                 )
               )
             )
           )
-      )
+      )(None)
     ))
   )
 }

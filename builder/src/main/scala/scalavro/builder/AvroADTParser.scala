@@ -1,12 +1,15 @@
 package scalavro.builder
 
+import java.nio.ByteBuffer
+
 import cats.data.NonEmptyList
 import eu.timepit.refined.types.string.NonEmptyString
-import scalavro.schema._
 import io.circe.syntax._
 
 import scala.reflect.api.Universe
 import scalavro.schema.parser.AvscParser._
+import scalavro.schema.types.AvscType
+import scalavro.schema.types.AvscType._
 
 object AvroADTParser {
   def apply(): AvroADTParser ={
@@ -92,8 +95,15 @@ class AvroADTParser(val universe: Universe) {
     fieldToValDefs(ns, field, Modifiers(MUTABLE | CASEACCESSOR | PARAMACCESSOR))
   }
 
-  private def fieldToConstParam(ns: NonEmptyString, field: Field): StuffContext[ValDef] =
-    fieldToValDefs(ns, field, Modifiers(universe.Flag.PARAM | universe.Flag.PARAMACCESSOR))
+  private def fieldToConstParam(ns: NonEmptyString, field: Field): StuffContext[ValDef] = {
+    val mod = if(field.default.nonEmpty) {
+      Modifiers(universe.Flag.PARAM | universe.Flag.PARAMACCESSOR | universe.Flag.DEFAULTPARAM)
+    } else {
+      Modifiers(universe.Flag.PARAM | universe.Flag.PARAMACCESSOR)
+    }
+    fieldToValDefs(ns, field, mod)
+  }
+
 
   private def fieldToValDefs(ns: NonEmptyString, field: Field, modifiers: Modifiers): StuffContext[ValDef] = {
     typeToTypeTree(ns, field.`type`).map { fieldTypeTree =>
@@ -101,9 +111,27 @@ class AvroADTParser(val universe: Universe) {
         modifiers,
         TermName(field.name.value),
         fieldTypeTree,
-        EmptyTree
+        field.default.fold(EmptyTree){d => defaultToTree(field.`type`)(d)}
       )
     }
+  }
+
+  private def defaultToTree(t: AvscType)(default: t.ScalaType): Tree = default match {
+    case x if x == null => q"null"
+    case x: Boolean => q"$x"
+    case x: Int => q"$x"
+    case x: Long => q"$x"
+    case x: Float => q"$x"
+    case x: Double => q"$x"
+    case x: String => q"$x"
+    case x: Array[Byte] => q"java.nio.ByteBuffer.wrap($x)"
+    case x: ByteBuffer => q"java.nio.ByteBuffer.wrap(${x.array()})"
+    case x: List[_] =>
+      val innerT = t.asInstanceOf[ArrayType[_ <: AvscType]].items
+      val y = x.map{xx =>
+        defaultToTree(innerT)(xx.asInstanceOf[innerT.ScalaType])
+      }
+      q"Array(..$y)"
   }
 
   private def fieldsToConstrcutor(ns: NonEmptyString, fs: NonEmptyList[Field]): StuffContext[DefDef] = {
@@ -121,16 +149,25 @@ class AvroADTParser(val universe: Universe) {
     }
   }
 
-  private def fieldToDefaultValues(fs: NonEmptyList[Field]): List[Literal] = {
-    fs.map(_.`type`).map {
-      case BoolType => Literal(Constant(false))
-      case DoubleType | FloatType | IntType | LongType => Literal(Constant(-1))
-      case _ => Literal(Constant(null))
-    }.toList
+  private def fieldToDefaultValues(ns: NonEmptyString, fs: NonEmptyList[Field]): NonEmptyList[Tree] = {
+    fs.map{field =>
+      if(field.default.isEmpty) {
+        emptyDefaultValue(ns, field.`type`)
+      } else {
+        defaultToTree(field.`type`)(field.default.get)
+      }
+    }
+  }
+
+  private def emptyDefaultValue(ns: NonEmptyString, t: AvscType): Tree = t match {
+    case BoolType => Literal(Constant(false))
+    case DoubleType | FloatType | IntType | LongType => Literal(Constant(-1))
+    case MapType(values) => q"Map.empty[String, ${typeToTypeTree(ns, values).a}]"
+    case _ => Literal(Constant(null))
   }
 
   private def fieldsToDefaultConstrcutor(ns: NonEmptyString, fs: NonEmptyList[Field]): DefDef = {
-    q"def this() = this(..${fieldToDefaultValues(fs)})".asInstanceOf[DefDef]
+    q"def this() = this(..${fieldToDefaultValues(ns, fs).toList})".asInstanceOf[DefDef]
   }
 
   private def fieldsToTemplate(ns: NonEmptyString, fs: NonEmptyList[Field]): StuffContext[Template] = for {

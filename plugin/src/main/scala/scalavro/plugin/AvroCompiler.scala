@@ -3,7 +3,7 @@ package scalavro.plugin
 import scalavro.builder.AvroADTParser
 import scalavro.schema.parser.AvscParser._
 import io.circe.parser._
-import scalavro.schema.Record
+import scalavro.schema.types.AvscType.Record
 
 object AvroCompiler {
   def apply(str: String): String = {

@@ -4,7 +4,8 @@ import cats.data.NonEmptyList
 import eu.timepit.refined.collection.NonEmpty
 import eu.timepit.refined.refineV
 import eu.timepit.refined.types.string.NonEmptyString
-import scalavro.schema.{Field, Record, ToAvscType}
+import scalavro.schema.types.AvscType._
+import scalavro.schema.types.ToAvscType
 import shapeless.labelled.FieldType
 import shapeless.ops.hlist.ToTraversable
 import shapeless.{::, HList, LabelledGeneric, _}
@@ -38,7 +39,7 @@ object Avroable {
     new Avroable[FieldType[K, V] :: T] {
       type Out = Field :: att.Out
 
-      def apply(): Out = Field(refineV[NonEmpty](w.value.name).right.get, None, ath.apply) :: att()
+      def apply(): Out = Field(refineV[NonEmpty](w.value.name).right.get, None, ath.apply)(None) :: att()
     }
 
   implicit def genAvr[K <: Symbol,
@@ -64,7 +65,7 @@ object Avroable {
           None,
           force(avrH.apply().toList)
         )
-        Field(force(w.value.name), None, r) :: avrT.value()
+        Field(force(w.value.name), None, r)(None) :: avrT.value()
       }
     }
   }

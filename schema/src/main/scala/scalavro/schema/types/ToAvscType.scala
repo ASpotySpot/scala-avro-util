@@ -1,4 +1,6 @@
-package scalavro.schema
+package scalavro.schema.types
+
+import scalavro.schema.types.AvscType._
 
 trait ToAvscType[A] {
   def apply: AvscType

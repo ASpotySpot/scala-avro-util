@@ -11,7 +11,7 @@ import scalavro.macros.{AsGenericContainer, AsIndexedRecord}
 class Test extends FlatSpec with Matchers {
 
 
-  @AsGenericContainer("""{"type":"record","name":"MyClass","fields":[{"name":"a","type":"int"},{"name":"s","type":"string"},{"name":"f","type":"float"},{"name":"bts","type":"bytes"}]}""")
+  @AsGenericContainer("""{"type":"record","name":"MyClass","fields":[{"name":"a","type":"int","default":3},{"name":"s","type":"string"},{"name":"f","type":"float"},{"name":"bts","type":"bytes"}]}""")
   case class MyClass(a: Int, s: String, f: Float, bts: ByteBuffer)
 
   @AsIndexedRecord("""{"type":"record","name":"MyClass","fields":[{"name":"a","type":"int"},{"name":"s","type":"string"},{"name":"f","type":"float"},{"name":"bts","type":"bytes"}]}""")

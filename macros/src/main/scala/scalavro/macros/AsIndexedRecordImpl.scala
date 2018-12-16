@@ -10,13 +10,15 @@ import org.apache.avro.Schema
 import org.apache.avro.generic.IndexedRecord
 import scalavro.schema._
 import scalavro.schema.parser.AvscParser
+import scalavro.schema.types.AvscType
+import scalavro.schema.types.AvscType._
 
 import scala.annotation.StaticAnnotation
 import scala.language.experimental.macros
 import scala.reflect.macros.whitebox
 import scala.util.Failure
 
-class AsIndexedRecord(schema: String) extends StaticAnnotation {
+class   AsIndexedRecord(schema: String) extends StaticAnnotation {
   def macroTransform(annottees: Any*): Any = macro AsIndexedRecordImpl.impl
 }
 
@@ -24,7 +26,6 @@ object AsIndexedRecordImpl {
   def impl(c: whitebox.Context)(annottees: c.Expr[Any]*): c.Expr[Any] = {
 
     type CT = c.universe.Tree
-    Test.tree(c.universe): c.universe.Tree
     import c.universe._
 
     val schemaString: String = c.prefix.tree match {
@@ -96,7 +97,7 @@ object AsIndexedRecordImpl {
 
     val importsDef: CT = q"""import scalavro.schema.parser.AvscParser._"""
     val schemaDef: CT = q"""override def getSchema(): org.apache.avro.Schema = new org.apache.avro.Schema.Parser().parse($schemaString)"""
-    val recordDef: CT = q"""val record: scalavro.schema.Record = io.circe.parser.decode[scalavro.schema.Record]($schemaString).right.get"""
+    val recordDef: CT = q"""val record: scalavro.schema.types.AvscType.Record = io.circe.parser.decode[scalavro.schema.types.AvscType.Record]($schemaString).right.get"""
     val getDef: CT = q"""override def get(i: Int): AnyRef = productElement(i).asInstanceOf[AnyRef]"""
     val putDef: CT =
       q"""override def put(i: Int, v: Any): Unit = i match {

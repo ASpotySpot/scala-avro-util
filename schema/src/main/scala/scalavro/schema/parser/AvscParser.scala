@@ -1,5 +1,7 @@
 package scalavro.schema.parser
 
+import java.nio.ByteBuffer
+
 import cats.data.{NonEmptyList, Validated, ValidatedNel}
 import eu.timepit.refined.types.string.NonEmptyString
 import io.circe._
@@ -9,9 +11,10 @@ import cats.syntax.traverse._
 import cats.syntax.either._
 import cats.syntax.apply._
 import cats.instances.vector._
-import scalavro.schema._
 import scalavro.util.RefineUtils._
 import JsonUtil._
+import scalavro.schema.types.{AvscType, Utils}
+import scalavro.schema.types.AvscType._
 
 object AvscParser extends AutoDerivation {
   type JsonCodec[A] = IsoErr[V, A, Json]
@@ -29,8 +32,8 @@ object AvscParser extends AutoDerivation {
 
   private object Functions {
 
-    def toSimple(j: String): SimpleAvscType = AvscType.simple(j)
-    def fromSimple(sat: SimpleAvscType): Json = Json.fromString(sat.toString)
+    def toSimple(j: String): SimpleAvscType = Utils.toSimple(j)
+    def fromSimple(sat: SimpleAvscType): Json = Json.fromString(Utils.fromSimple(sat))
     def toRecord(jo: JsonObject): V[Record] = {
       val nameSpace: V[Option[NonEmptyString]] = jo.getStringOptNE("namespace")
       val name: V[NonEmptyString] = jo.getStringNE("name")
@@ -61,7 +64,14 @@ object AvscParser extends AutoDerivation {
       val name: V[NonEmptyString] = jo.getStringNE("name")
       val doc: V[Option[String]] = jo.getStringOpt("doc")
       val avscType: V[AvscType] = jo.get("type").flatMap(toType)
-      (name, doc, avscType).mapN(Field.apply)
+      (name, doc, avscType).mapN { case (n, d, t) =>
+        jo("default").map { json =>
+          Validated.fromOption(t.parseDefault(json), s"Invalid Default for $avscType".toNel)
+        } match {
+          case None => Validated.Valid(Field.apply(n,d,t)(None))
+          case Some(vt) => vt.map(dt => Field.apply(n,d,t)(Some(dt)))
+        }
+      }.flatten
     }
     def fromField(f: Field): Json = {
 
@@ -71,9 +81,37 @@ object AvscParser extends AutoDerivation {
           "type" -> fromType(f.`type`)
         ),
         List(
-          f.doc.map(doc => "doc" -> Json.fromString(doc))
+          f.doc.map(doc => "doc" -> Json.fromString(doc)),
+          DefaultFuncs.fromField(f)
         )
       )
+    }
+    object DefaultFuncs {
+      def fromField(f: Field): Option[(String, Json)] = {
+        f.default.map { d =>
+          "default" -> inner(f.`type`)(d.asInstanceOf[f.`type`.ScalaType])
+        }
+      }
+      private def inner(t: AvscType)(d: t.ScalaType): Json = t match {
+        case NullType => Json.Null
+        case BoolType => Json.fromBoolean(d.asInstanceOf[Boolean])
+        case IntType => Json.fromInt(d.asInstanceOf[Int])
+        case LongType => Json.fromLong(d.asInstanceOf[Long])
+        case FloatType => Json.fromFloat(d.asInstanceOf[Float]).get
+        case DoubleType => Json.fromDouble(d.asInstanceOf[Double]).get
+        case StringType => Json.fromString(d.asInstanceOf[String])
+        case BytesType => Json.fromValues(d.asInstanceOf[ByteBuffer].array().map(b => Json.fromInt(b.toInt)))
+        case ArrayType(items) =>
+          val dd = d.asInstanceOf[List[items.ScalaType]]
+          val col = dd.map(v => inner(items)(v))
+          val r = Json.fromValues(col)
+          r
+        case MapType(values) =>
+          val dd = d.asInstanceOf[Map[String, values.ScalaType]]
+          val obj = JsonObject.fromMap(dd.map { case (k, v) => k -> inner(values)(v)})
+          Json.fromJsonObject(obj)
+        case _ => Json.Null
+      }
     }
     def toEnum(jo: JsonObject): V[EnumType] = {
       val name = jo.getStringNE("name")
@@ -101,12 +139,12 @@ object AvscParser extends AutoDerivation {
         )
       )
     }
-    def toArray(jo: JsonObject): V[ArrayType] = {
+    def toArray(jo: JsonObject): V[ArrayType[_]] = {
       jo.get("items").flatMap{jsonType =>
-        toType(jsonType).map(ArrayType)
+        toType(jsonType).map(ArrayType.apply)
       }
     }
-    def fromArray(arr: ArrayType): Json = {
+    def fromArray(arr: ArrayType[_ <: AvscType]): Json = {
       fromFields(
         "type" -> Json.fromString("array"),
         "items" -> fromType(arr.items)
@@ -155,7 +193,7 @@ object AvscParser extends AutoDerivation {
       case sat: SimpleAvscType => fromSimple(sat)
       case rec: Record => fromRecord(rec)
       case enum: EnumType => fromEnum(enum)
-      case arr: ArrayType => fromArray(arr)
+      case arr: ArrayType[_] => fromArray(arr)
       case map: MapType => fromMap(map)
       case union: Union => fromUnion(union)
       case fixed: Fixed => fromFixed(fixed)

@@ -3,10 +3,14 @@ package scalavro.schema
 import org.scalatest.FlatSpec
 import io.circe.parser._
 import scalavro.schema.parser.AvscParser._
+import scalavro.schema.types.AvscType.Record
 
 class AvscParserTest extends FlatSpec {
   "Parser" should "handle parsing the json in example 1" in {
-    decode[Record](example1).right.get
+    decode[Record](example1) match {
+      case Left(err) => throw new Exception(s"Parse Error: $err")
+      case Right(_) => //println(v)
+    }
   }
   val example1 = """
   |{
@@ -18,7 +22,8 @@ class AvscParserTest extends FlatSpec {
   |    {
   |      "name": "id",
   |      "doc": "System-assigned numeric user ID. Cannot be changed by the user.",
-  |      "type": "int"
+  |      "type": "int",
+  |      "default": 3
   |    },
   |    {
   |      "name": "username",
