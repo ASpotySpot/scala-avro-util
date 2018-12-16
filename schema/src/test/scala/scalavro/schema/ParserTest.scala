@@ -118,7 +118,7 @@ class ParserTest extends FlatSpec {
                   Field(refineMV[NonEmpty]("title"), None, StringType)(None),
                   Field(refineMV[NonEmpty]("description"), None, Union(NonEmptyList(NullType, List(StringType))))(None),
                   Field(refineMV[NonEmpty]("snoozeDate"), None, Union(NonEmptyList(NullType, List(LongType))))(None),
-                  Field(refineMV[NonEmpty]("subItems"), None, ArrayType(RecordByName("ToDoItem")))(None)
+                  Field(refineMV[NonEmpty]("subItems"), None, ArrayType(RecordByName(refineMV[NonEmpty]("ToDoItem"))))(None)
                 )
               )
             )

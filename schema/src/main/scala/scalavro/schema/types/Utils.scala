@@ -1,6 +1,8 @@
 package scalavro.schema.types
 
+import eu.timepit.refined.collection.NonEmpty
 import scalavro.schema.types.AvscType._
+import eu.timepit.refined.refineV
 
 object Utils {
   def toSimple(typeStr: String): SimpleAvscType = typeStr match {
@@ -12,7 +14,7 @@ object Utils {
     case "double" => DoubleType
     case "bytes" => BytesType
     case "string" => StringType
-    case recName => RecordByName(recName)
+    case recName => RecordByName(refineV[NonEmpty](typeStr).right.get)
   }
   def fromSimple(avscType: SimpleAvscType): String = avscType match {
     case NullType => "null"
@@ -23,7 +25,7 @@ object Utils {
     case DoubleType => "double"
     case BytesType => "bytes"
     case StringType => "string"
-    case RecordByName(name) => name
+    case RecordByName(name) => name.value
   }
 
   def fromScala(typeStr: String): AvscType = typeStr match {

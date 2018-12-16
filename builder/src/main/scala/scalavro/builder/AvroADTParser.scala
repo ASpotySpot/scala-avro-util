@@ -50,12 +50,15 @@ class AvroADTParser(val universe: Universe) {
     case DoubleType => tq"Double"
     case StringType => tq"String"
     case BytesType => tq"java.nio.ByteBuffer"
-    case RecordByName(name: String) => tq"${TypeName(s"${ns.value}.${name.value}")}"
+    case RecordByName(name) => tq"${TypeName(s"${ns.value}.${name.value}")}"
   }
 
   private def typeToTypeTree(ns: NonEmptyString, `type`: AvscType): StuffContext[Tree] = `type` match {
     case tn: SimpleAvscType => StuffContext.empty(typeToTypeName(tn, ns.value))
-    case r: Record => StuffContext(tq"${TypeName(s"${ns.value}.${r.name.value}")}", StuffToBuild(List(r), List.empty))
+    case r: Record =>
+      val namespace = r.namespace.getOrElse(ns)
+      val nsTree = nsToPackage(s"${namespace.value}.${r.name.value}")
+      StuffContext(nsTree, StuffToBuild(List(r), List.empty))
     case EnumType(name, _, _, _, symbols) =>
       val t = nsToPackage(s"${ns.value}.${name.value}")
       StuffContext(t, StuffToBuild(List.empty, List((ns, name, symbols))))
@@ -79,15 +82,11 @@ class AvroADTParser(val universe: Universe) {
   private val cop: TermName = TermName("$colon$plus$colon")
 
   private def buildUnion(ns: NonEmptyString, types: List[AvscType]): StuffContext[Tree] = {
-    if (types.length == 1) {
-      typeToTypeTree(ns, types.head)
-    } else {
-      types.foldLeft(StuffContext.empty(tq"CNil": Tree)) { case (ctx, next) =>
-        for {
-          tree <- ctx
-          nextTree <- typeToTypeTree(ns, next)
-        } yield q"$cop[..${List(nextTree, tree)}]"
-      }
+    types.foldLeft(StuffContext.empty(tq"CNil": Tree)) { case (ctx, next) =>
+      for {
+        tree <- ctx
+        nextTree <- typeToTypeTree(ns, next)
+      } yield q"$cop[..${List(nextTree, tree)}]"
     }
   }
 

@@ -1,75 +1,84 @@
-//package scalavro.builder
-//
-//import eu.timepit.refined.collection.NonEmpty
-//import org.scalatest.{FlatSpec, Matchers}
-//import eu.timepit.refined.{refineMV, refineV}
-//import eu.timepit.refined.types.string.NonEmptyString
-//import org.scalatest.prop.Checkers
-//import org.scalacheck.{Arbitrary, Gen}
-//import org.scalacheck.Prop.forAll
-//import org.scalacheck.ScalacheckShapeless._
-//
-//import tools.reflect.ToolBox
-//import scalavro.schema.types.AvscType
-//import scalavro.schema.types.AvscType._
-//
-//
-//
-//import scala.reflect.runtime.currentMirror
-//import scala.util.{Failure, Success, Try}
-//
-//class ArbitaryADTParserTest extends FlatSpec with Checkers with Matchers {
-//  implicit val arbString: Arbitrary[NonEmptyString] = Arbitrary{
-//    Gen.nonEmptyListOf(Gen.alphaLowerChar).map(_.mkString).map(s => refineV[NonEmpty](s).right.get)
-//  }
-//  def s(t: AvscType): Arbitrary[t.ScalaType] = {
-//    def cast(g: Gen[_]): Arbitrary[t.ScalaType] = Arbitrary(g.map(_.asInstanceOf[t.ScalaType]))
-//    val z = t match {
-//      case NullType => cast(Gen.const(null))
-//      case BoolType => cast(Arbitrary.arbitrary[Boolean])
-//      case IntType => cast(Arbitrary.arbitrary[Int])
-//      case LongType => cast(Arbitrary.arbitrary[Long])
-//      case FloatType => cast(Arbitrary.arbitrary[Float])
-//      case DoubleType => cast(Arbitrary.arbitrary[Double])
-//      case StringType => cast(Arbitrary.arbitrary[String])
-//      case BytesType => cast(Arbitrary.arbitrary[Array[Byte]])
-//      case ArrayType(tt) => cast(s(tt).arbitrary)
-//      case MapType(tt) => cast(s(tt).arbitrary)
-//      case Union(tts) => cast(s(tts.head).arbitrary)
-//      case _: Fixed => cast(Arbitrary.arbitrary[Array[Byte]])
-//      case _: EnumType => cast(Arbitrary.arbitrary[String])
-//      case _ => cast(Gen.const(null))
-//    }
-//    z
-//  }
-//  implicit val fGen: Arbitrary[Field] = Arbitrary{for {
-//    name <- arbString.arbitrary
-//    doc <- Gen.option(arbString.arbitrary).map(_.map(_.value))
-//    at <- Arbitrary.arbitrary[AvscType]
-//    d <- s(at).arbitrary.map(Some(_))
-//  } yield Field(name,doc,at)(d)}
-//
-//
-//  "AvroADT Parser" should "not crash with arbitary values" in {
-//    val parser = AvroADTParser.apply()
-//    check(forAll{r: Record =>
-//      val newR = if(r.namespace.isEmpty) r.copy(namespace = Some(refineMV[NonEmpty]("ns"))) else r
-//      val code = parser.buildAllClassesAsStr(newR).mkString("\n")
-//      Try {
-//        val toolbox = currentMirror.mkToolBox()
-//        val _ = toolbox.parse(code)
-//        println(code)
-//        //        val compiledCode = toolbox.compile(tree)
-//        //        compiledCode()
-//      } match {
-//        case Success(_) => //
-//        case Failure(ex) =>
-//          println("=========")
-//          println(newR)
-//          println(code)
-//          throw ex
-//      }
-//      true
-//    })
-//  }
-//}
+package scalavro.builder
+
+import eu.timepit.refined.collection.NonEmpty
+import org.scalatest.{FlatSpec, Matchers}
+import eu.timepit.refined.{refineMV, refineV}
+import eu.timepit.refined.types.string.NonEmptyString
+import org.scalatest.prop.Checkers
+import org.scalacheck.{Arbitrary, Gen}
+import org.scalacheck.Prop.forAll
+import org.scalacheck.ScalacheckShapeless._
+
+import tools.reflect.ToolBox
+import scalavro.schema.types.AvscType
+import scalavro.schema.types.AvscType._
+import ArbAvsc._
+import cats.data.NonEmptyList
+
+import scala.reflect.runtime.currentMirror
+import scala.util.{Failure, Success, Try}
+
+class ArbitaryADTParserTest extends FlatSpec with Checkers with Matchers {
+  "AvroADT Parser" should "not crash with arbitary values" in {
+    val parser = AvroADTParser.apply()
+    check(forAll { r: Record =>
+      val newR = r.copy(namespace = Some(refineMV[NonEmpty]("ns")))
+      Try(parser.buildAllClassesAsStr(newR)).map(cleanCode) match {
+        case Failure(ex) =>
+          printBad(newR, None)
+          throw ex
+
+        case Success(code) =>
+          Try(checkCompile(newR, code)) match {
+
+            case Success(_) => true
+            case Failure(ex) =>
+              printBad(newR, Some(code))
+              throw ex
+          }
+      }
+    })
+  }
+
+  implicit def nestr(s: String): NonEmptyString = refineV[NonEmpty](s).right.get
+  implicit def nels[A](ls: List[A]): NonEmptyList[A] = NonEmptyList(ls.head, ls.tail)
+  //This is just here to allow easy recreating of cases failed above test.
+  it should "recreate single example" in {
+    val record: Option[Record] = None
+
+    record.foreach { record =>
+      val parser = AvroADTParser.apply()
+      val code = cleanCode(parser.buildAllClassesAsStr(record))
+      println(code)
+      checkCompile(record, code)
+    }
+  }
+
+  def printBad(r: Record, code: Option[String]): Unit = {
+    println("=========")
+    println(r)
+    println(code.getOrElse(""))
+    println("=========")
+  }
+
+  val codeLines = Array(
+    "import shapeless.{:+:, CNil}",
+    "class AsIndexedRecord(schema: String) extends scala.annotation.StaticAnnotation"
+  )
+  def cleanCode(code: List[String]): String = {
+    val rawCode = code.mkString("\n").split('\n')
+    val fixedDefs = codeLines ++ rawCode
+    val droppedLines = fixedDefs.filterNot{line =>
+      line.contains("import scalavro.macros.AsIndexedRecord")
+    }
+    droppedLines.mkString("\n")
+  }
+  def checkCompile(record: Record, code: String): Unit = {
+    val classes = List(s"${record.namespace.get.value}.${record.name}")
+    CompileTest.apply(code, classes)
+//    val toolbox = currentMirror.mkToolBox()
+//    val tree = toolbox.parse(code)
+//    val compiledCode = toolbox.compile(tree)
+//    val _ = compiledCode()
+  }
+}

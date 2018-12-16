@@ -47,7 +47,7 @@ object AvscType {
     override type ScalaType = String
     override def parseDefault(json: Json): Option[String] = json.asString
   }
-  case class RecordByName(name: String) extends SimpleAvscType {
+  case class RecordByName(name: NonEmptyString) extends SimpleAvscType {
     override type ScalaType = JsonObject
     override def parseDefault(json: Json): Option[JsonObject] = json.asObject
   }
@@ -65,6 +65,7 @@ object AvscType {
                       val doc: Option[String],
                       val `type`: AvscType) {
     def default: Option[`type`.ScalaType] = None
+    override def toString: String = s"Field($name, $doc, ${`type`})($default)"
   }
   object Field {
     def apply(name: NonEmptyString,

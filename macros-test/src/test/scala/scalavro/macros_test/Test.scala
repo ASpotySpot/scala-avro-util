@@ -24,14 +24,15 @@ class Test extends FlatSpec with Matchers {
   }
 
   def x(g: GenericContainer): Unit = {
-    println(g.getSchema)
+    val _ = g.getSchema
   }
   def y(ir: IndexedRecord): Unit = {
-    println(ir.getSchema)
-    println(ir.get(2))
+    discard(ir.getSchema)
+    discard(ir.get(2))
     ir.put(2, 7f)
-    println(ir.get(2))
+    discard(ir.get(2))
     ir.put(3, ByteBuffer.wrap(Array[Byte](1,2,3)))
-    println(ir.get(3).asInstanceOf[ByteBuffer].array().mkString(","))
+    discard(ir.get(3).asInstanceOf[ByteBuffer].array().mkString(","))
   }
+  private def discard(a: Any): Unit = {}
 }

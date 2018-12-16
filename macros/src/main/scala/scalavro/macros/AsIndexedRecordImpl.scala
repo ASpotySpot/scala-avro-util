@@ -18,7 +18,7 @@ import scala.language.experimental.macros
 import scala.reflect.macros.whitebox
 import scala.util.Failure
 
-class   AsIndexedRecord(schema: String) extends StaticAnnotation {
+class AsIndexedRecord(schema: String) extends StaticAnnotation {
   def macroTransform(annottees: Any*): Any = macro AsIndexedRecordImpl.impl
 }
 

@@ -35,7 +35,7 @@ class AvroADTParserTest extends FlatSpec with Matchers {
     val expected =
       """|package tomw {
          |  import scalavro.macros.AsIndexedRecord
-         |  @AsIndexedRecord("{\"namespace\":\"tomw\",\"name\":\"MyClass\",\"fields\":[{\"name\":\"a\",\"type\":\"int\"},{\"name\":\"s\",\"type\":\"string\"},{\"name\":\"f\",\"type\":\"float\"},{\"name\":\"bts\",\"type\":\"bytes\"}],\"type\":\"record\"}") case class MyClass(var a: Int = 3, var s: String = "defaultVal", var f: Float, var bts: java.nio.ByteBuffer = java.nio.ByteBuffer.wrap(scala.Array(1, 2, 3))) {
+         |  @AsIndexedRecord("{\"namespace\":\"tomw\",\"name\":\"MyClass\",\"fields\":[{\"default\":3,\"name\":\"a\",\"type\":\"int\"},{\"default\":\"defaultVal\",\"name\":\"s\",\"type\":\"string\"},{\"name\":\"f\",\"type\":\"float\"},{\"default\":[1,2,3],\"name\":\"bts\",\"type\":\"bytes\"}],\"type\":\"record\"}") case class MyClass(var a: Int = 3, var s: String = "defaultVal", var f: Float, var bts: java.nio.ByteBuffer = java.nio.ByteBuffer.wrap(scala.Array(1, 2, 3))) {
          |    def this() = {
          |      this(3, "defaultVal", -1, java.nio.ByteBuffer.wrap(scala.Array(1, 2, 3)));
          |      ()
