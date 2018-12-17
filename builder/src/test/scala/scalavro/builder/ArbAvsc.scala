@@ -28,8 +28,12 @@ object ArbAvsc {
       Arbitrary.arbitrary[EnumType],
       Arbitrary.arbitrary[Fixed],
       Arbitrary.arbitrary[Record],
-      Arbitrary.arbitrary[MapType],
-      Arbitrary.arbitrary[Union],
+      for {
+        t1 <- simpleAvscType
+        t2 <- simpleAvscType
+        t3 <- simpleAvscType
+      } yield Union(t1, List(t2, t3)),
+      simpleAvscType.map(t => MapType(t)),
       simpleAvscType.map(t => ArrayType(t))
     )
   }

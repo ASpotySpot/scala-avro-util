@@ -15,7 +15,6 @@ import scalavro.schema.types.AvscType._
 import ArbAvsc._
 import cats.data.NonEmptyList
 
-import scala.reflect.runtime.currentMirror
 import scala.util.{Failure, Success, Try}
 
 class ArbitaryADTParserTest extends FlatSpec with Checkers with Matchers {
@@ -23,9 +22,9 @@ class ArbitaryADTParserTest extends FlatSpec with Checkers with Matchers {
     val parser = AvroADTParser.apply()
     check(forAll { r: Record =>
       val newR = r.copy(namespace = Some(refineMV[NonEmpty]("ns")))
-      Try(parser.buildAllClassesAsStr(newR)).map(cleanCode) match {
+      Try(parser.buildAllClassesAsStr(newR)) match {
         case Failure(ex) =>
-          printBad(newR, None)
+          println(newR)
           throw ex
 
         case Success(code) =>
@@ -33,7 +32,7 @@ class ArbitaryADTParserTest extends FlatSpec with Checkers with Matchers {
 
             case Success(_) => true
             case Failure(ex) =>
-              printBad(newR, Some(code))
+              println(newR)
               throw ex
           }
       }
@@ -48,37 +47,12 @@ class ArbitaryADTParserTest extends FlatSpec with Checkers with Matchers {
 
     record.foreach { record =>
       val parser = AvroADTParser.apply()
-      val code = cleanCode(parser.buildAllClassesAsStr(record))
-      println(code)
+      val code = parser.buildAllClassesAsStr(record)
       checkCompile(record, code)
     }
   }
 
-  def printBad(r: Record, code: Option[String]): Unit = {
-    println("=========")
-    println(r)
-    println(code.getOrElse(""))
-    println("=========")
-  }
-
-  val codeLines = Array(
-    "import shapeless.{:+:, CNil}",
-    "class AsIndexedRecord(schema: String) extends scala.annotation.StaticAnnotation"
-  )
-  def cleanCode(code: List[String]): String = {
-    val rawCode = code.mkString("\n").split('\n')
-    val fixedDefs = codeLines ++ rawCode
-    val droppedLines = fixedDefs.filterNot{line =>
-      line.contains("import scalavro.macros.AsIndexedRecord")
-    }
-    droppedLines.mkString("\n")
-  }
-  def checkCompile(record: Record, code: String): Unit = {
-    val classes = List(s"${record.namespace.get.value}.${record.name}")
-    CompileTest.apply(code, classes)
-//    val toolbox = currentMirror.mkToolBox()
-//    val tree = toolbox.parse(code)
-//    val compiledCode = toolbox.compile(tree)
-//    val _ = compiledCode()
+  def checkCompile(record: Record, code: List[String]): Unit = {
+    CustomCompiler.apply(code, s"${record.namespace.get.value}.${record.name}")
   }
 }

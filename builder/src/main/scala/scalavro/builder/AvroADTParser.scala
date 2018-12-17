@@ -65,9 +65,9 @@ class AvroADTParser(val universe: Universe) {
 
     case ArrayType(itemType) => typeToTypeTree(ns, itemType).map(t => tq"Array[$t]")
     case MapType(valueType) => typeToTypeTree(ns, valueType).map(t => tq"Map[..${Seq(tq"String", tq"$t")}]")
-    case Union(types) =>
-      val containsNull = types.toList.contains(NullType)
-      val notNulls = types.filter(_ != NullType)
+    case u @ Union(_, _) =>
+      val containsNull = u.types.toList.contains(NullType)
+      val notNulls = u.types.filter(_ != NullType)
       val baseUnionCtx = buildUnion(ns, notNulls)
       baseUnionCtx.map { baseUnion =>
         if (containsNull) {
@@ -115,22 +115,32 @@ class AvroADTParser(val universe: Universe) {
     }
   }
 
-  private def defaultToTree(t: AvscType)(default: t.ScalaType): Tree = default match {
-    case x if x == null => q"null"
-    case x: Boolean => q"$x"
-    case x: Int => q"$x"
-    case x: Long => q"$x"
-    case x: Float => q"$x"
-    case x: Double => q"$x"
-    case x: String => q"$x"
-    case x: Array[Byte] => q"java.nio.ByteBuffer.wrap($x)"
-    case x: ByteBuffer => q"java.nio.ByteBuffer.wrap(${x.array()})"
-    case x: List[_] =>
-      val innerT = t.asInstanceOf[ArrayType[_ <: AvscType]].items
-      val y = x.map{xx =>
-        defaultToTree(innerT)(xx.asInstanceOf[innerT.ScalaType])
+
+  private def defaultToTree(t: AvscType)(default: t.ScalaType): Tree = (t, default) match {
+    case (NullType, null) => q"null"
+    case (BoolType, d: Boolean) => q"$d"
+    case (IntType, d: Int) => q"$d"
+    case (LongType, d: Long) => q"$d"
+    case (FloatType, d: Float) => q"$d"
+    case (DoubleType, d: Double) => q"$d"
+    case (StringType, d: String) => q"$d"
+    case (BytesType, d: ByteBuffer) => q"java.nio.ByteBuffer.wrap(${d.array()})"
+    case (Fixed(_, _, _, _), d: Array[Byte]) => q"$d"
+    case (at: ArrayType[_], d: List[_]) =>
+      val innerMapped = d.map{inD =>
+        defaultToTree(at.items)(inD.asInstanceOf[at.items.ScalaType])
       }
-      q"Array(..$y)"
+      q"Array(..$innerMapped)"
+    case (mt: MapType[_], d: Map[_, _]) =>
+      val innerMapped = d.map{case (k, inD) =>
+        val vt = defaultToTree(mt.values)(inD.asInstanceOf[mt.values.ScalaType])
+        q"(${k.asInstanceOf[String]}, $vt)"
+      }
+      q"Map(..$innerMapped)"
+    case (ut: Union[_], d) =>
+      val innerT = defaultToTree(ut.head)(d.asInstanceOf[ut.head.ScalaType])
+      ut.tail.foldLeft(q"Inl($innerT)"){case (soFar, _) => q"Inr($soFar)"}
+    case (t, v) => throw new MatchError(s"Invalid Type Default Pair ($t, $v)")
   }
 
   private def fieldsToConstrcutor(ns: NonEmptyString, fs: NonEmptyList[Field]): StuffContext[DefDef] = {

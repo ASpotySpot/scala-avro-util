@@ -96,7 +96,7 @@ object AvscType {
     }
   }
 
-  case class MapType(values: AvscType) extends ComplexAvscType {
+  case class MapType[X <: AvscType](values: X) extends ComplexAvscType {
     override type ScalaType = Map[String, values.ScalaType]
     override def parseDefault(json: Json): Option[Map[String, values.ScalaType]] =
       json.asObject.flatMap(_.toMap.map { case (k, v) =>
@@ -107,17 +107,18 @@ object AvscType {
       }).map(_.toMap)
   }
 
-  case class Union(types: NonEmptyList[AvscType]) extends ComplexAvscType {
-    override type ScalaType = types.head.ScalaType
-    override def parseDefault(json: Json): Option[types.head.ScalaType] = types.head.parseDefault(json)
+  case class Union[X <: AvscType](head: X, tail: List[AvscType]) extends ComplexAvscType {
+    def types: NonEmptyList[AvscType] = NonEmptyList(head, tail)
+    override type ScalaType = head.ScalaType
+    override def parseDefault(json: Json): Option[head.ScalaType] = head.parseDefault(json)
   }
 
   case class Fixed(name: NonEmptyString,
                    namespace: Option[NonEmptyString],
                    aliases: Option[List[NonEmptyString]],
                    size: Int) extends ComplexAvscType {
-    override type ScalaType = ByteBuffer
-    override def parseDefault(json: Json): Option[ByteBuffer] = json.asString.map(_.map(_.toByte).toArray).map(ByteBuffer.wrap)
+    override type ScalaType = Array[Byte]
+    override def parseDefault(json: Json): Option[Array[Byte]] = json.asString.map(_.map(_.toByte).toArray)
   }
 }
 

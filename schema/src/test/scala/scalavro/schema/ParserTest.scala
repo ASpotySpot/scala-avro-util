@@ -9,10 +9,10 @@ import scalavro.schema.types.AvscType._
 class ParserTest extends FlatSpec {
 
   "Parser" should "handle ex2" in {
-//    AvroADTParser.buildAllClassesAsStr(ex2).foreach(println)
+    //    AvroADTParser.buildAllClassesAsStr(ex2).foreach(println)
   }
   it should "handle ex3" in {
-//    AvroADTParser.buildAllClassesAsStr(ex3)
+    //    AvroADTParser.buildAllClassesAsStr(ex3)
   }
   val ex2 = Record(
     refineMV[NonEmpty]("User"),
@@ -39,7 +39,7 @@ class ParserTest extends FlatSpec {
                 List(
                   Field(refineMV[NonEmpty]("verified"), None, BoolType)(None),
                   Field(refineMV[NonEmpty]("dateAdded"), None, LongType)(None),
-                  Field(refineMV[NonEmpty]("dateBounced"), None, Union(NonEmptyList(NullType, List(LongType))))(None),
+                  Field(refineMV[NonEmpty]("dateBounced"), None, Union(NullType, List(LongType)))(None),
                 )
               )
             )
@@ -78,7 +78,7 @@ class ParserTest extends FlatSpec {
                   Field(refineMV[NonEmpty]("userId"), None, LongType)(None),
                   Field(refineMV[NonEmpty]("screenName"), None, StringType)(None),
                   Field(refineMV[NonEmpty]("oauthToken"), None, StringType)(None),
-                  Field(refineMV[NonEmpty]("oauthTokenSecret"), None, Union(NonEmptyList(NullType, List(StringType))))(None),
+                  Field(refineMV[NonEmpty]("oauthTokenSecret"), None, Union(NullType, List(StringType)))(None),
                   Field(refineMV[NonEmpty]("dateAuthorized"), None, LongType)(None),
                 )
               )
@@ -116,8 +116,8 @@ class ParserTest extends FlatSpec {
                 )(None),
                 List(
                   Field(refineMV[NonEmpty]("title"), None, StringType)(None),
-                  Field(refineMV[NonEmpty]("description"), None, Union(NonEmptyList(NullType, List(StringType))))(None),
-                  Field(refineMV[NonEmpty]("snoozeDate"), None, Union(NonEmptyList(NullType, List(LongType))))(None),
+                  Field(refineMV[NonEmpty]("description"), None, Union(NullType, List(StringType)))(None),
+                  Field(refineMV[NonEmpty]("snoozeDate"), None, Union(NullType, List(LongType)))(None),
                   Field(refineMV[NonEmpty]("subItems"), None, ArrayType(RecordByName(refineMV[NonEmpty]("ToDoItem"))))(None)
                 )
               )
@@ -133,36 +133,35 @@ class ParserTest extends FlatSpec {
     None,
     None,
     NonEmptyList(
-      Field(refineMV[NonEmpty]("union1"), None, Union(NonEmptyList(StringType, List(IntType))))(None),
+      Field(refineMV[NonEmpty]("union1"), None, Union(StringType, List(IntType)))(None),
       List(
         Field(
           refineMV[NonEmpty]("union2"),
           None,
-          Union(NonEmptyList(NullType, List(IntType)))
+          Union(NullType, List(IntType))
         )(None),
         Field(
           refineMV[NonEmpty]("union3"),
           None,
-          Union(NonEmptyList(NullType, List(IntType, StringType))),
+          Union(NullType, List(IntType, StringType)),
         )(None),
         Field(
           refineMV[NonEmpty]("union4"),
           None,
           Union(
-            NonEmptyList(
-              NullType,
-              List(
-                Record(
-                  refineMV[NonEmpty]("r1"),
-                  None,
-                  None,
-                  None,
-                  NonEmptyList(
-                    Field(refineMV[NonEmpty]("int"), None, IntType)(None),
-                    List.empty
-                  )
+            NullType,
+            List(
+              Record(
+                refineMV[NonEmpty]("r1"),
+                None,
+                None,
+                None,
+                NonEmptyList(
+                  Field(refineMV[NonEmpty]("int"), None, IntType)(None),
+                  List.empty
                 )
               )
+
             )
           )
         )(None),
@@ -170,24 +169,22 @@ class ParserTest extends FlatSpec {
           refineMV[NonEmpty]("union4"),
           None,
           Union(
-            NonEmptyList(
-              NullType,
-              List(
-                StringType,
-                Record(
-                  refineMV[NonEmpty]("r2"),
-                  None,
-                  None,
-                  None,
-                  NonEmptyList(
-                    Field(refineMV[NonEmpty]("int"), None, IntType)(None),
-                    List.empty
-                  )
+            NullType,
+            List(
+              StringType,
+              Record(
+                refineMV[NonEmpty]("r2"),
+                None,
+                None,
+                None,
+                NonEmptyList(
+                  Field(refineMV[NonEmpty]("int"), None, IntType)(None),
+                  List.empty
                 )
               )
             )
           )
-      )(None)
-    ))
+        )(None)
+      ))
   )
 }

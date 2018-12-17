@@ -89,7 +89,7 @@ object AvscParser extends AutoDerivation {
     object DefaultFuncs {
       def fromField(f: Field): Option[(String, Json)] = {
         f.default.map { d =>
-          "default" -> inner(f.`type`)(d.asInstanceOf[f.`type`.ScalaType])
+          "default" -> inner(f.`type`)(d)
         }
       }
       private def inner(t: AvscType)(d: t.ScalaType): Json = t match {
@@ -101,6 +101,7 @@ object AvscParser extends AutoDerivation {
         case DoubleType => Json.fromDouble(d.asInstanceOf[Double]).get
         case StringType => Json.fromString(d.asInstanceOf[String])
         case BytesType => Json.fromValues(d.asInstanceOf[ByteBuffer].array().map(b => Json.fromInt(b.toInt)))
+        case _: Fixed => Json.fromValues(d.asInstanceOf[Array[Byte]].map(b => Json.fromInt(b.toInt)))
         case ArrayType(items) =>
           val dd = d.asInstanceOf[List[items.ScalaType]]
           val col = dd.map(v => inner(items)(v))
@@ -110,7 +111,12 @@ object AvscParser extends AutoDerivation {
           val dd = d.asInstanceOf[Map[String, values.ScalaType]]
           val obj = JsonObject.fromMap(dd.map { case (k, v) => k -> inner(values)(v)})
           Json.fromJsonObject(obj)
-        case _ => Json.Null
+        case Union(head, tail) =>
+          val dd = d.asInstanceOf[head.ScalaType]
+          inner(head)(dd)
+        case _: EnumType => ???
+        case _: Record => ???
+        case _: RecordByName => ???
       }
     }
     def toEnum(jo: JsonObject): V[EnumType] = {
@@ -150,23 +156,23 @@ object AvscParser extends AutoDerivation {
         "items" -> fromType(arr.items)
       )
     }
-    def toMap(jo: JsonObject): V[MapType] = {
+    def toMap(jo: JsonObject): V[MapType[_ <: AvscType]] = {
       jo.get("values").flatMap{jsonType =>
-        toType(jsonType).map(MapType)
+        toType(jsonType).map(MapType.apply)
       }
     }
-    def fromMap(map: MapType): Json = {
+    def fromMap(map: MapType[_ <: AvscType]): Json = {
       fromFields(
         "type" -> Json.fromString("map"),
         "values" -> fromType(map.values)
       )
     }
-    def toUnion(js: Vector[Json]): V[Union] = {
+    def toUnion(js: Vector[Json]): V[Union[_]] = {
       js.map(j => toType(j)).sequence[V, AvscType].flatMap{vs =>
-        vs.toNel.map(Union.apply)
+        vs.toNel.map(nel => Union(nel.head, nel.tail))
       }
     }
-    def fromUnion(union: Union): Json = {
+    def fromUnion(union: Union[_]): Json = {
       Json.fromValues(union.types.map(fromType).toList)
     }
     def toFixed(jo: JsonObject): V[Fixed] = {
@@ -194,8 +200,8 @@ object AvscParser extends AutoDerivation {
       case rec: Record => fromRecord(rec)
       case enum: EnumType => fromEnum(enum)
       case arr: ArrayType[_] => fromArray(arr)
-      case map: MapType => fromMap(map)
-      case union: Union => fromUnion(union)
+      case map: MapType[_] => fromMap(map)
+      case union: Union[_] => fromUnion(union)
       case fixed: Fixed => fromFixed(fixed)
     }
     def toType(j: Json): V[AvscType] = j match {

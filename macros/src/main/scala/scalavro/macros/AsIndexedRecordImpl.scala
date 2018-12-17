@@ -70,9 +70,9 @@ object AsIndexedRecordImpl {
       case DoubleType => Ident(TypeName("Double"))
       case BytesType => Select(Select(Ident(TermName("java")), TermName("nio")), TypeName("ByteBuffer"))
       case StringType => Ident(TypeName("String"))
-      case Union(types) =>
-        val containsNull = types.toList.contains(NullType)
-        val notNulls = types.filter(_ != NullType)
+      case u @ Union(_, _) =>
+        val containsNull = u.types.toList.contains(NullType)
+        val notNulls = u.types.filter(_ != NullType)
         val baseUnion = buildUnion(notNulls)
         if (containsNull) {
           wrapInOption(baseUnion)
@@ -91,7 +91,7 @@ object AsIndexedRecordImpl {
         recbyNameToTypeName(s"${name.value}")
       case Fixed(_, _, _, _) => q"Array[Byte]"
       case r: Record => recbyNameToTypeName(s"${r.name.value}")
-      case RecordByName(name) => Ident(TypeName(name))
+      case RecordByName(name) => Ident(TypeName(name.value))
     }
 
 
