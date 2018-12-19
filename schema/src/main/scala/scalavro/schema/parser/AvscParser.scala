@@ -100,8 +100,14 @@ object AvscParser extends AutoDerivation {
         case FloatType => Json.fromFloat(d.asInstanceOf[Float]).get
         case DoubleType => Json.fromDouble(d.asInstanceOf[Double]).get
         case StringType => Json.fromString(d.asInstanceOf[String])
-        case BytesType => Json.fromValues(d.asInstanceOf[ByteBuffer].array().map(b => Json.fromInt(b.toInt)))
+        case BytesType =>
+          val bytes = d.asInstanceOf[ByteBuffer].array().map(_.toInt.toHexString).map{
+            case single if single.length == 1=> s"0$single"
+            case other => other.takeRight(2)
+          }.mkString
+          Json.fromString(s"\\u$bytes")
         case _: Fixed => Json.fromValues(d.asInstanceOf[Array[Byte]].map(b => Json.fromInt(b.toInt)))
+        case _: EnumType => Json.fromString(d.asInstanceOf[String])
         case ArrayType(items) =>
           val dd = d.asInstanceOf[List[items.ScalaType]]
           val col = dd.map(v => inner(items)(v))
@@ -114,7 +120,6 @@ object AvscParser extends AutoDerivation {
         case Union(head, tail) =>
           val dd = d.asInstanceOf[head.ScalaType]
           inner(head)(dd)
-        case _: EnumType => ???
         case _: Record => ???
         case _: RecordByName => ???
       }

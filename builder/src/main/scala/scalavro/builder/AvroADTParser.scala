@@ -50,7 +50,7 @@ class AvroADTParser(val universe: Universe) {
     case DoubleType => tq"Double"
     case StringType => tq"String"
     case BytesType => tq"java.nio.ByteBuffer"
-    case RecordByName(name) => tq"${TypeName(s"${ns.value}.${name.value}")}"
+    case RecordByName(name) => nsToPackage(s"${ns.value}.${name.value}")
   }
 
   private def typeToTypeTree(ns: NonEmptyString, `type`: AvscType): StuffContext[Tree] = `type` match {
@@ -126,6 +126,7 @@ class AvroADTParser(val universe: Universe) {
     case (StringType, d: String) => q"$d"
     case (BytesType, d: ByteBuffer) => q"java.nio.ByteBuffer.wrap(${d.array()})"
     case (Fixed(_, _, _, _), d: Array[Byte]) => q"$d"
+    case (et: EnumType, d: String) => q"${nsToPackage(et.name.value)}.fromString($d)"
     case (at: ArrayType[_], d: List[_]) =>
       val innerMapped = d.map{inD =>
         defaultToTree(at.items)(inD.asInstanceOf[at.items.ScalaType])
