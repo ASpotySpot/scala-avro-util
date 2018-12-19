@@ -1,22 +1,13 @@
 package scalavro.macros
 
-import cats.data.NonEmptyList
-import scalavro.util.RefineUtils._
-import io.circe.syntax._
-import io.circe.generic._
 import io.circe.parser._
 import scalavro.schema.parser.AvscParser._
-import org.apache.avro.Schema
-import org.apache.avro.generic.IndexedRecord
-import scalavro.schema._
-import scalavro.schema.parser.AvscParser
-import scalavro.schema.types.AvscType
+import scalavro.builder.AvroADTParser
 import scalavro.schema.types.AvscType._
 
 import scala.annotation.StaticAnnotation
 import scala.language.experimental.macros
 import scala.reflect.macros.whitebox
-import scala.util.Failure
 
 class AsIndexedRecord(schema: String) extends StaticAnnotation {
   def macroTransform(annottees: Any*): Any = macro AsIndexedRecordImpl.impl
@@ -24,8 +15,7 @@ class AsIndexedRecord(schema: String) extends StaticAnnotation {
 
 object AsIndexedRecordImpl {
   def impl(c: whitebox.Context)(annottees: c.Expr[Any]*): c.Expr[Any] = {
-
-    type CT = c.universe.Tree
+    val adtBuilder = AvroADTParser(c.universe)
     import c.universe._
 
     val schemaString: String = c.prefix.tree match {
@@ -38,75 +28,17 @@ object AsIndexedRecordImpl {
       case Left(err) => c.abort(c.enclosingPosition, s"Schema Parse Error: $schemaString: $err")
     }
 
-
-    val cop: TypeName = TypeName("$colon$plus$colon")
-    def buildUnion(types: List[AvscType]): Tree = {
-      if (types.length == 1) {
-        typeToTree(types.head)
-      } else {
-        types.foldLeft(Ident(TypeName("CNil")): Tree) { case (tree, next) =>
-          AppliedTypeTree(Ident(cop), List(typeToTree(next), tree))
-        }
-      }
-    }
-    def wrapInOption(tree: Tree): Tree = {
-      AppliedTypeTree(
-        Ident(TypeName("Option")),
-        List(tree)
-      )
-    }
-    def recbyNameToTypeName(ns: String): Tree = {
-      val split = ns.split('.')
-      split.tail.foldLeft(Ident(TypeName(split.head)): RefTree) {case (tn, s) =>
-        Select(tn, TypeName(s))
-      }
-    }
-    def typeToTree(avscType: AvscType): c.universe.Tree = avscType match {
-      case NullType => Ident(TypeName("Null"))
-      case BoolType => Ident(TypeName("Boolean"))
-      case IntType => Ident(TypeName("Int"))
-      case LongType => Ident(TypeName("Long"))
-      case FloatType => Ident(TypeName("Float"))
-      case DoubleType => Ident(TypeName("Double"))
-      case BytesType => Select(Select(Ident(TermName("java")), TermName("nio")), TypeName("ByteBuffer"))
-      case StringType => Ident(TypeName("String"))
-      case u @ Union(_, _) =>
-        val containsNull = u.types.toList.contains(NullType)
-        val notNulls = u.types.filter(_ != NullType)
-        val baseUnion = buildUnion(notNulls)
-        if (containsNull) {
-          wrapInOption(baseUnion)
-        } else {
-          baseUnion
-        }
-      case ArrayType(a) => AppliedTypeTree(
-        Ident(TypeName("Array")),
-        List(typeToTree(a))
-      )
-      case MapType(a) => AppliedTypeTree(
-        Ident(TypeName("Map")),
-        List(typeToTree(a))
-      )
-      case EnumType(name, _, _, _, symbols) =>
-        recbyNameToTypeName(s"${name.value}")
-      case Fixed(_, _, _, _) => q"Array[Byte]"
-      case r: Record => recbyNameToTypeName(s"${r.name.value}")
-      case RecordByName(name) => Ident(TypeName(name.value))
-    }
-
-
-    val importsDef: CT = q"""import scalavro.schema.parser.AvscParser._"""
-    val schemaDef: CT = q"""override def getSchema(): org.apache.avro.Schema = new org.apache.avro.Schema.Parser().parse($schemaString)"""
-    val recordDef: CT = q"""val record: scalavro.schema.types.AvscType.Record = io.circe.parser.decode[scalavro.schema.types.AvscType.Record]($schemaString).right.get"""
-    val getDef: CT = q"""override def get(i: Int): AnyRef = productElement(i).asInstanceOf[AnyRef]"""
-    val putDef: CT =
-      q"""override def put(i: Int, v: Any): Unit = i match {
-         case ..${
-        record.
-          fields.toList.zipWithIndex.
-          map { case (f, i) => cq"""$i => ${TermName(f.name.toString)} = v.asInstanceOf[${typeToTree(f.`type`)}]""" }
-        }}
-       """
+    val body =
+q"""
+import scalavro.schema.parser.AvscParser._
+override def getSchema(): org.apache.avro.Schema = new org.apache.avro.Schema.Parser().parse($schemaString)
+val record: scalavro.schema.types.AvscType.Record = io.circe.parser.decode[scalavro.schema.types.AvscType.Record]($schemaString).right.get
+override def get(i: Int): AnyRef = productElement(i).asInstanceOf[AnyRef]
+override def put(i: Int, v: Any): Unit = i match {
+  case ..${record.fields.toList.zipWithIndex.map { case (f, i) => cq"""$i => ${TermName(f.name.toString)} = v.asInstanceOf[${adtBuilder.typeToTypeTree(record.namespace.get, f.`type`).a}]""" }
+  }
+}
+"""
 
     def modifiedClass(classDecl: ClassDef) = {
       val (className, fields) = try {
@@ -126,11 +58,7 @@ object AsIndexedRecordImpl {
       val r = c.Expr[Any](
         q"""
         case class $className ( ..$params ) extends org.apache.avro.generic.IndexedRecord {
-          $importsDef
-          $schemaDef
-          $recordDef
-          $getDef
-          $putDef
+          $body
         }
         """
       )

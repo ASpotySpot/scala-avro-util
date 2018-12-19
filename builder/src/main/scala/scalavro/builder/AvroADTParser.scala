@@ -13,15 +13,15 @@ import scalavro.schema.types.AvscType
 import scalavro.schema.types.AvscType._
 
 object AvroADTParser {
-  def apply(): AvroADTParser ={
+  def apply(): AvroADTParser[scala.reflect.runtime.universe.type] = {
     apply(scala.reflect.runtime.universe)
   }
-  def apply(universe: Universe): AvroADTParser = {
+  def apply(universe: Universe): AvroADTParser[universe.type] = {
     new AvroADTParser(universe)
   }
 }
 
-class AvroADTParser(val universe: Universe) {
+class AvroADTParser[U <: Universe](val universe: U) {
   import universe.Flag._
   import universe._
 
@@ -54,7 +54,7 @@ class AvroADTParser(val universe: Universe) {
     case RecordByName(name) => nsToPackage(s"${ns.value}.${name.value}")
   }
 
-  private def typeToTypeTree(ns: NonEmptyString, `type`: AvscType): StuffContext[Tree] = `type` match {
+  def typeToTypeTree(ns: NonEmptyString, `type`: AvscType): StuffContext[Tree] = `type` match {
     case tn: SimpleAvscType => StuffContext.empty(typeToTypeName(tn, ns.value))
     case r: Record =>
       val namespace = r.namespace.getOrElse(ns)

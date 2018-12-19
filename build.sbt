@@ -47,7 +47,7 @@ lazy val builder = (project in file("builder"))
   )
 
 lazy val macros = (project in file("macros"))
-  .dependsOn(schema)
+  .dependsOn(builder)
   .settings(
     commonSettings,
     libraryDependencies += "org.scala-lang" % "scala-reflect" % "2.12.4",
@@ -99,7 +99,7 @@ lazy val root = (project in file(".")).aggregate(`macros-test`,
                                                  plugin)
 
 lazy val scalacFlags = Seq(
-//  "-deprecation", // Emit warning and location for usages of deprecated APIs.
+  "-deprecation", // Emit warning and location for usages of deprecated APIs.
   "-encoding",
   "utf-8", // Specify character encoding used by source files.
   "-explaintypes", // Explain type errors in more detail.
