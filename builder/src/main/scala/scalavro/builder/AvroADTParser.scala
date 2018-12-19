@@ -4,6 +4,7 @@ import java.nio.ByteBuffer
 
 import cats.data.NonEmptyList
 import eu.timepit.refined.types.string.NonEmptyString
+import io.circe.{Json, JsonObject}
 import io.circe.syntax._
 
 import scala.reflect.api.Universe
@@ -141,7 +142,25 @@ class AvroADTParser(val universe: Universe) {
     case (ut: Union[_], d) =>
       val innerT = defaultToTree(ut.head)(d.asInstanceOf[ut.head.ScalaType])
       ut.tail.foldLeft(q"Inl($innerT)"){case (soFar, _) => q"Inr($soFar)"}
+    case (r: Record, j: JsonObject) =>  buildClassValue(r, j)
     case (t, v) => throw new MatchError(s"Invalid Type Default Pair ($t, $v)")
+  }
+
+  private def buildClassValue(r: Record, jo: JsonObject): Tree = {
+    val fTrees = r.
+      fields.
+      map(f => f.name.value -> jo(f.name.value).getOrElse(throw new Exception(s"Could not find ${f.name} in $jo"))).
+      map{case (name, json) => q"${TermName(name)} = ${jsonToTree(json)}"}
+    q"${nsToPackage(r.name.value)}(..${fTrees.toList})"
+  }
+
+  private def jsonToTree(json: Json): Tree = json match {
+    case _ if json.isString => q"${json.asString.get}"
+    case _ if json.isNumber =>
+      val num = json.asNumber.get
+      num.toInt.map(i => q"$i").
+        orElse(num.toLong.map(l => q"$l")).
+        getOrElse(q"${num.toDouble}")
   }
 
   private def fieldsToConstrcutor(ns: NonEmptyString, fs: NonEmptyList[Field]): StuffContext[DefDef] = {

@@ -120,8 +120,8 @@ object AvscParser extends AutoDerivation {
         case Union(head, tail) =>
           val dd = d.asInstanceOf[head.ScalaType]
           inner(head)(dd)
-        case _: Record => ???
-        case _: RecordByName => ???
+        case _: Record => Json.fromJsonObject(d.asInstanceOf[JsonObject])
+        case _: RecordByName => Json.fromJsonObject(d.asInstanceOf[JsonObject])
       }
     }
     def toEnum(jo: JsonObject): V[EnumType] = {

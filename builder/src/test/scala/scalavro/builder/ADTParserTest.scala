@@ -6,6 +6,7 @@ import cats.data.NonEmptyList
 import org.scalatest.{Assertion, FlatSpec, Matchers}
 import scalavro.schema.types.AvscType._
 import RefineUtils._
+import io.circe.{Json, JsonObject}
 
 class ADTParserTest extends FlatSpec with Matchers {
   private def build(rec: Record): String = AvroADTParser().buildAllClassesAsStr(rec).mkString("\n")
@@ -166,7 +167,7 @@ class ADTParserTest extends FlatSpec with Matchers {
       Field("a", None, ArrayType(IntType))(None),
       """{\"name\":\"a\",\"type\":{\"type\":\"array\",\"items\":\"int\"}}""",
       """var a: Array[Int]""",
-      """null""" 
+      """null"""
     )
     testSingleField(
         Field("a", None, ArrayType(IntType))(Some(List(1,2,1))),
@@ -279,6 +280,46 @@ class ADTParserTest extends FlatSpec with Matchers {
                        |  @AsIndexedRecord("{\"namespace\":\"tomw\",\"name\":\"Outer\",\"fields\":[{\"name\":\"inner\",\"type\":{\"name\":\"Inner\",\"fields\":[{\"name\":\"i\",\"type\":\"int\"}],\"type\":\"record\"}}],\"type\":\"record\"}") case class Outer(var inner: tomw.Inner) {
                        |    def this() = {
                        |      this(null);
+                       |      ()
+                       |    }
+                       |  }
+                       |}""".stripMargin
+    val result = build(input)
+    testEqual(result, expected)
+  }
+
+  it should "build record types with defaults" in {
+    val input = Record(
+      "Outer",
+      Some("tomw"),
+      None,
+      None,
+      List(
+        Field(
+          "inner", None, Record(
+            "Inner",
+            None,
+            None,
+            None,
+            List(Field("i", None, IntType)(Some(4)))
+          )
+        )(Some(JsonObject.fromMap(Map(
+          "i" -> Json.fromInt(3)
+          ))
+        ))
+      )
+    )
+    val expected =  """|package tomw {
+                       |  import scalavro.macros.AsIndexedRecord
+                       |  @AsIndexedRecord("{\"name\":\"Inner\",\"fields\":[{\"default\":4,\"name\":\"i\",\"type\":\"int\"}],\"type\":\"record\"}") case class Inner(var i: Int = 4) {
+                       |    def this() = {
+                       |      this(4);
+                       |      ()
+                       |    }
+                       |  }
+                       |  @AsIndexedRecord("{\"namespace\":\"tomw\",\"name\":\"Outer\",\"fields\":[{\"default\":{\"i\":3},\"name\":\"inner\",\"type\":{\"name\":\"Inner\",\"fields\":[{\"default\":4,\"name\":\"i\",\"type\":\"int\"}],\"type\":\"record\"}}],\"type\":\"record\"}") case class Outer(var inner: tomw.Inner = Inner(i = 3)) {
+                       |    def this() = {
+                       |      this(Inner(i = 3));
                        |      ()
                        |    }
                        |  }
