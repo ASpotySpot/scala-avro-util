@@ -99,7 +99,7 @@ lazy val root = (project in file(".")).aggregate(`macros-test`,
                                                  plugin)
 
 lazy val scalacFlags = Seq(
-  "-deprecation", // Emit warning and location for usages of deprecated APIs.
+//  "-deprecation", // Emit warning and location for usages of deprecated APIs.
   "-encoding",
   "utf-8", // Specify character encoding used by source files.
   "-explaintypes", // Explain type errors in more detail.
@@ -110,7 +110,7 @@ lazy val scalacFlags = Seq(
   "-language:implicitConversions", // Allow definition of implicit functions called views
   "-unchecked", // Enable additional warnings where generated code depends on assumptions.
   "-Xcheckinit", // Wrap field accessors to throw an exception on uninitialized access.
-  "-Xfatal-warnings", // Fail the compilation if there are any warnings.
+//  "-Xfatal-warnings", // Fail the compilation if there are any warnings.
   "-Xfuture", // Turn on future language features.
 //  "-Xlint:adapted-args", // Warn if an argument list is modified to match the receiver.
 //  "-Xlint:by-name-right-associative", // By-name parameter of right associative operator.

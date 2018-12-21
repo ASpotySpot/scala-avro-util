@@ -5,9 +5,11 @@ import java.nio.ByteBuffer
 import cats.data.NonEmptyList
 import eu.timepit.refined.types.string.NonEmptyString
 import io.circe.{Json, JsonObject}
+import scalavro.schema.types.LogicalType.IdentLT
 
 sealed trait AvscType {
   type ScalaType
+  type ExternalType = ScalaType
   def parseDefault(json: Json): Option[ScalaType]
 }
 

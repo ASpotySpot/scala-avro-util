@@ -1,5 +1,6 @@
 package scalavro.macros
 
+import eu.timepit.refined.collection.NonEmpty
 import io.circe.parser._
 import scalavro.schema.parser.AvscParser._
 import scalavro.builder.AvroADTParser
@@ -8,6 +9,7 @@ import scalavro.schema.types.AvscType._
 import scala.annotation.StaticAnnotation
 import scala.language.experimental.macros
 import scala.reflect.macros.whitebox
+import eu.timepit.refined.refineV
 
 class AsIndexedRecord(schema: String) extends StaticAnnotation {
   def macroTransform(annottees: Any*): Any = macro AsIndexedRecordImpl.impl
@@ -17,6 +19,10 @@ object AsIndexedRecordImpl {
   def impl(c: whitebox.Context)(annottees: c.Expr[Any]*): c.Expr[Any] = {
     val adtBuilder = AvroADTParser(c.universe)
     import c.universe._
+    val packageName = refineV[NonEmpty](c.enclosingPackage.toString().drop(8).takeWhile(!_.isWhitespace)) match {
+      case Right(value) => value
+      case Left(_) => c.abort(c.enclosingPosition, "Could not extract package name")
+    }
 
     val schemaString: String = c.prefix.tree match {
       case q"new $name( ..$params )" if params.length == 1 => params.head.toString.filterNot(_ == '\\').drop(1).dropRight(1)
@@ -27,18 +33,6 @@ object AsIndexedRecordImpl {
       case Right(record) => record
       case Left(err) => c.abort(c.enclosingPosition, s"Schema Parse Error: $schemaString: $err")
     }
-
-    val body =
-q"""
-import scalavro.schema.parser.AvscParser._
-override def getSchema(): org.apache.avro.Schema = new org.apache.avro.Schema.Parser().parse($schemaString)
-val record: scalavro.schema.types.AvscType.Record = io.circe.parser.decode[scalavro.schema.types.AvscType.Record]($schemaString).right.get
-override def get(i: Int): AnyRef = productElement(i).asInstanceOf[AnyRef]
-override def put(i: Int, v: Any): Unit = i match {
-  case ..${record.fields.toList.zipWithIndex.map { case (f, i) => cq"""$i => ${TermName(f.name.toString)} = v.asInstanceOf[${adtBuilder.typeToTypeTree(record.namespace.get, f.`type`).a}]""" }
-  }
-}
-"""
 
     def modifiedClass(classDecl: ClassDef) = {
       val (className, fields) = try {
@@ -58,7 +52,14 @@ override def put(i: Int, v: Any): Unit = i match {
       val r = c.Expr[Any](
         q"""
         case class $className ( ..$params ) extends org.apache.avro.generic.IndexedRecord {
-          $body
+          import scalavro.schema.parser.AvscParser._
+          override def getSchema(): org.apache.avro.Schema = new org.apache.avro.Schema.Parser().parse($schemaString)
+          val record: scalavro.schema.types.AvscType.Record = io.circe.parser.decode[scalavro.schema.types.AvscType.Record]($schemaString).right.get
+          override def get(i: Int): AnyRef = productElement(i).asInstanceOf[AnyRef]
+          override def put(i: Int, v: Any): Unit = i match {
+            case ..${record.fields.toList.zipWithIndex.map { case (f, i) => cq"""$i => ${TermName(f.name.toString)} = v.asInstanceOf[${adtBuilder.typeToTypeTree(record.namespace.getOrElse(packageName), f.`type`).a}]""" }
+        }
+        }
         }
         """
       )

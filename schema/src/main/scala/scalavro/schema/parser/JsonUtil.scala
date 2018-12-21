@@ -87,4 +87,9 @@ object JsonUtil {
       next.fold(soFar)(n => n :: soFar)
     }))
   }
+  def fromFields2(iter: (String, Json)*)(iterO: Option[(String, Json)]*): Json = {
+    Json.fromJsonObject(JsonObject.fromIterable(iterO.foldLeft(iter.toList){(soFar, next) =>
+      next.fold(soFar)(n => n :: soFar)
+    }))
+  }
 }
